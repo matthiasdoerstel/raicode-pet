@@ -695,10 +695,10 @@ ORDER = ["idle", "stretch", "look", "working", "waiting", "done", "failed"]
 
 CHARACTERS = [
     # (id, display name, palette, frames builder)
-    ("pixel-dog", "Gus|Griffon", GRIFFON, griffon_frames),
+    # Gus the griffon (griffon_frames) is parked for now — add him back here to ship him.
+    ("pixel-golden", "Sunny|Golden Dog", GOLDEN, lambda: animal(golden_head, "dog", belly=True)),
     ("pixel-cat", "Mochi|Cat", CAT, lambda: animal(cat_head, "cat", belly=True)),
     ("pixel-robot", "Bolt|Robot", ROBOT, robot_frames),
-    ("pixel-golden", "Sunny|Golden Dog", GOLDEN, lambda: animal(golden_head, "dog", belly=True)),
 ]
 
 
@@ -719,7 +719,7 @@ def write_swift(built):
            "}",
            "",
            "enum PixelSprites {",
-           "    static let characters: [PixelCharacter] = [all[0], all[1], all[2], all[3]]",
+           "    static let characters: [PixelCharacter] = all",
            "",
            "    private static let all: [PixelCharacter] = ["]
     for cid, name, pal, frames in built:

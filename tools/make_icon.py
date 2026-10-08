@@ -36,12 +36,12 @@ def icon():
         t = y / (inner - 1)
         d.line([(0, y), (inner, y)], fill=tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)) + (255,))
 
-    rows = gs.griffon_sitting(eye="open", mouth="tongue", tail_a=0.6, blush=True).rows()
+    rows = gs.sitting(gs.golden_head, eye="happy", mouth="tongue", tail_a=0.8, blush=True).rows()
     dog = Image.new("RGBA", (gs.W, gs.H), (0, 0, 0, 0))
     for y, row in enumerate(rows):
         for x, ch in enumerate(row):
-            if ch in gs.GRIFFON:
-                dog.putpixel((x, y), gs.GRIFFON[ch] + (255,))
+            if ch in gs.GOLDEN:
+                dog.putpixel((x, y), gs.GOLDEN[ch] + (255,))
     scale = 19  # 32px * 19 = 608px
     dog = dog.resize((gs.W * scale, gs.H * scale), Image.NEAREST)
 
