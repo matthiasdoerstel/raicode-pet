@@ -58,7 +58,7 @@ final class PixelArt: PetArt {
         case .idle: return 1.1
         case .stretch: return 0.7
         case .lookAround: return 0.45
-        case .working: return 0.16
+        case .working: return 0.3
         case .waiting, .wave: return 0.35
         case .done, .celebrate: return 0.18
         case .failed: return 0.9
@@ -146,6 +146,7 @@ final class CodexPetArt: PetArt {
         switch animation {
         case .idle, .stretch, .lookAround: return 0.16
         case .failed: return 0.18
+        case .working: return 0.2
         default: return 0.11
         }
     }

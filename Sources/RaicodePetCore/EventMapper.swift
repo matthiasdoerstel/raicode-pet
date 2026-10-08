@@ -95,6 +95,14 @@ public enum EventMapper {
                 return .unchanged
             }
             let cwd = input.cwd ?? previous?.cwd ?? ""
+            let taskStartedAt: Date?
+            switch state {
+            case .idle: taskStartedAt = nil
+            case .done, .failed: taskStartedAt = previous?.taskStartedAt
+            default:
+                // a new prompt starts a new task; otherwise keep the running task's start
+                taskStartedAt = input.hookEventName == "UserPromptSubmit" ? now : (previous?.taskStartedAt ?? now)
+            }
             return .write(SessionRecord(
                 sessionId: sessionId,
                 cwd: cwd,
@@ -102,7 +110,8 @@ public enum EventMapper {
                 state: state,
                 detail: detail,
                 pid: pid ?? previous?.pid,
-                updatedAt: now
+                updatedAt: now,
+                taskStartedAt: taskStartedAt
             ))
         }
     }

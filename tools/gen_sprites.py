@@ -403,11 +403,10 @@ def animal(head, kind, belly):
         look.append(cv.rows())
     f["look"] = look
     w = []
-    for i, (paw, bob, ear) in enumerate([("left", 0, "normal"), ("down", -1, "flap"),
-                                         ("right", 0, "normal"), ("down", -1, "flap")]):
-        cv = S(eye="open", mouth="tongue", ear=ear, paw=paw, bob=bob,
-               tail_a=(0.3 if i % 2 else 0.8) if kind != "cat" else (0.6 if i % 2 else -0.6))
-        speed_lines(cv, i % 2)
+    # calm "busy" loop: paw taps and a soft bob, no ear flaps or speed lines
+    for i, (paw, bob) in enumerate([("left", 0), ("down", -1), ("right", 0), ("down", -1)]):
+        cv = S(eye="open", mouth="tongue", paw=paw, bob=bob,
+               tail_a=(0.5 if i % 2 else 0.7) if kind != "cat" else (0.2 if i % 2 else -0.2))
         w.append(cv.rows())
     f["working"] = w
     f["waiting"] = [S(eye="open", mouth="open", ear="perk", paw="raised", tail_a=0.4).rows(),
@@ -561,10 +560,8 @@ def griffon_frames():
     f["stretch"] = [S(eye="closed").rows(), S(eye="closed", mouth="open", ear="perk").rows(), S().rows()]
     f["look"] = [S(cx=15.5 + dx, ear="perk").rows() for dx in (0, -1, -1, 0, 1, 1, 0)]
     w = []
-    for i, (paw, bob, ear) in enumerate([("left", 0, "normal"), ("down", -1, "flap"),
-                                         ("right", 0, "normal"), ("down", -1, "flap")]):
-        cv = S(mouth="tongue", ear=ear, paw=paw, bob=bob, tail_a=0.1 if i % 2 else 0.7)
-        speed_lines(cv, i % 2)
+    for i, (paw, bob) in enumerate([("left", 0), ("down", -1), ("right", 0), ("down", -1)]):
+        cv = S(mouth="tongue", paw=paw, bob=bob, tail_a=0.3 if i % 2 else 0.5)
         w.append(cv.rows())
     f["working"] = w
     f["waiting"] = [S(eye="wide", mouth="open", ear="perk", paw="raised", tail_a=0.2).rows(),
@@ -667,8 +664,7 @@ def robot_frames():
     f["look"] = [robot(eye="open", look=dx, screen_extra="flat").rows() for dx in (0, -2, -2, 0, 2, 2, 0)]
     w = []
     for i, arms in enumerate(("left", "down", "right", "down")):
-        cv = robot(eye="open", light="y" if i % 2 == 0 else "g", arms=arms, dy=-(i % 2), screen_extra=i % 3)
-        speed_lines(cv, i % 2)
+        cv = robot(eye="open", light="y", arms=arms, dy=-(i % 2), screen_extra=i % 3)
         w.append(cv.rows())
     f["working"] = w
     f["waiting"] = [robot(eye="wide", light="a", arms="wave", screen_extra="o").rows(),

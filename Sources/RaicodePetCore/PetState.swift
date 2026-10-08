@@ -28,9 +28,11 @@ public struct SessionRecord: Codable, Equatable, Sendable {
     public var detail: String?
     public var pid: Int32?
     public var updatedAt: Date
+    /// When the current task (prompt) began; kept through done/failed so its length is known.
+    public var taskStartedAt: Date?
 
     public init(sessionId: String, cwd: String, project: String, state: PetState,
-                detail: String? = nil, pid: Int32? = nil, updatedAt: Date) {
+                detail: String? = nil, pid: Int32? = nil, updatedAt: Date, taskStartedAt: Date? = nil) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.project = project
@@ -38,5 +40,24 @@ public struct SessionRecord: Codable, Equatable, Sendable {
         self.detail = detail
         self.pid = pid
         self.updatedAt = updatedAt
+        self.taskStartedAt = taskStartedAt
+    }
+
+    /// How long the task ran, up to the latest update.
+    public var taskDuration: TimeInterval? {
+        taskStartedAt.map { updatedAt.timeIntervalSince($0) }
+    }
+}
+
+public enum NotificationPolicy {
+    /// "Done" only notifies for tasks at least this long; "needs input" always notifies.
+    public static let minTaskDuration: TimeInterval = 5 * 60
+
+    public static func shouldAnnounce(_ record: SessionRecord) -> Bool {
+        switch record.state {
+        case .waiting: return true
+        case .done: return (record.taskDuration ?? 0) >= minTaskDuration
+        default: return false
+        }
     }
 }

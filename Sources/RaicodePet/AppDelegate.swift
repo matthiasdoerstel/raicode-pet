@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         buildStatusItem()
 
         store.onTransition = { session, _ in
-            if session.state == .waiting || session.state == .done {
+            if NotificationPolicy.shouldAnnounce(session) {
                 Task { @MainActor in Notifier.announce(session) }
             }
         }

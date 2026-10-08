@@ -33,6 +33,31 @@ final class EventMapperTests: XCTestCase {
         XCTAssertEqual(r.pid, 42)
     }
 
+    func testTaskStartIsKeptThroughWorkAndDone() {
+        guard case let .write(started) = EventMapper.apply(input("UserPromptSubmit"), to: nil, pid: 1, now: now),
+              case let .write(working) = EventMapper.apply(input("PreToolUse"), to: started, pid: 1,
+                                                           now: now.addingTimeInterval(60)),
+              case let .write(done) = EventMapper.apply(input("Stop"), to: working, pid: 1,
+                                                        now: now.addingTimeInterval(400)) else {
+            return XCTFail("expected writes")
+        }
+        XCTAssertEqual(started.taskStartedAt, now)
+        XCTAssertEqual(working.taskStartedAt, now)
+        XCTAssertEqual(done.taskDuration, 400)
+    }
+
+    func testNotificationPolicy() {
+        func record(_ state: PetState, ran seconds: TimeInterval?) -> SessionRecord {
+            SessionRecord(sessionId: "s", cwd: "/x", project: "x", state: state, updatedAt: now,
+                          taskStartedAt: seconds.map { now.addingTimeInterval(-$0) })
+        }
+        XCTAssertFalse(NotificationPolicy.shouldAnnounce(record(.done, ran: 30)))
+        XCTAssertFalse(NotificationPolicy.shouldAnnounce(record(.done, ran: nil)))
+        XCTAssertTrue(NotificationPolicy.shouldAnnounce(record(.done, ran: 5 * 60)))
+        XCTAssertTrue(NotificationPolicy.shouldAnnounce(record(.waiting, ran: 5)))
+        XCTAssertFalse(NotificationPolicy.shouldAnnounce(record(.working, ran: 600)))
+    }
+
     func testSessionStartDoesNotClearUnacknowledgedDone() {
         let done = SessionRecord(sessionId: "s1", cwd: "/x", project: "x", state: .done, updatedAt: now)
         XCTAssertEqual(EventMapper.apply(input("SessionStart"), to: done, pid: nil, now: now), .unchanged)
