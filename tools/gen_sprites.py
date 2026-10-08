@@ -20,17 +20,18 @@ EFFECTS = set("zyY")
 # ---------- palettes (one per character) ----------
 
 GRIFFON = {
-    "o": (16, 14, 20),     # outline
-    "t": (76, 72, 86),     # coat (black, a little lifted so the face reads)
-    "d": (36, 33, 42),     # ears / shading
-    "b": (156, 150, 164),  # beard, brows, chest fluff
-    "k": (6, 6, 8),        # eyes / nose
-    "w": (255, 255, 255),  # eye highlight / tooth
+    "o": (14, 12, 18),     # outline
+    "t": (62, 58, 70),     # black coat, lifted a touch so details read
+    "d": (34, 31, 40),     # ears, inner shading
+    "m": (128, 120, 138),  # beard mask / moustache / brows (rough hair highlights)
+    "e": (96, 60, 38),     # warm brown eye
+    "k": (6, 6, 8),        # pupils / nose
+    "w": (255, 255, 255),  # eye shine / teeth
     "p": (240, 120, 140),  # tongue
-    "h": (210, 120, 130),  # blush
+    "h": (200, 112, 124),  # blush
     "r": (214, 58, 52),    # collar
     "y": (250, 204, 72),   # tag / sparkles
-    "z": (150, 170, 220),  # sleep z's / effects
+    "z": (150, 170, 220),  # effects
 }
 
 GOLDEN = {
@@ -224,66 +225,6 @@ def eyes(cv, cx, ey, kind, spread, size, iris="k"):
             cv.set(x0, ey + size - 2, "w")
 
 
-def griffon_head(cv, cx, cy, eye="open", mouth="smile", ear="normal", blush=False):
-    # small "rose" ears set high and wide, tips folding outward
-    if ear == "perk":
-        L, tip = [(cx - 8.5, cy - 3), (cx - 8, cy - 9.5), (cx - 4.5, cy - 6.5)], (cx - 9, cy - 9)
-    elif ear == "flat":
-        L, tip = [(cx - 8, cy - 2), (cx - 11.5, cy - 4.5), (cx - 5.5, cy - 5.5)], (cx - 12, cy - 3.5)
-    elif ear == "flap":
-        L, tip = [(cx - 8.5, cy - 3), (cx - 10.5, cy - 8.5), (cx - 4.5, cy - 6.5)], (cx - 11, cy - 7.5)
-    else:
-        L, tip = [(cx - 8.5, cy - 3), (cx - 9, cy - 8.5), (cx - 4.5, cy - 6.5)], (cx - 10, cy - 7.5)
-    for side in (-1, 1):
-        m = (lambda pts: [(2 * cx - x, y) for x, y in pts]) if side == 1 else (lambda pts: pts)
-        cv.poly(m(L), "d")
-        tx, ty = m([tip])[0]
-        cv.set(tx, ty, "d")
-    # big round domed head with a few rough-coat tufts on top
-    cv.ellipse(cx, cy, 9.2, 7.6, "t")
-    cv.px([(cx - 3, cy - 8), (cx, cy - 8), (cx + 3, cy - 8)], "t")
-    # brows: lighter tufts
-    for side in (-1, 1):
-        bx = cx + side * 4.5
-        cv.px([(bx - 1.5, cy - 4), (bx - 0.5, cy - 4.5), (bx + 0.5, cy - 4.5), (bx + 1.5, cy - 4)], "b")
-    # beard: wide muzzle, moustache flaring past the cheeks, shaggy fringe below
-    cv.ellipse(cx, cy + 3.8, 5.6, 3.0, "b", outline=False)
-    for side in (-1, 1):
-        cv.px([(cx + side * 6.5, cy + 3), (cx + side * 7.5, cy + 3.5), (cx + side * 8.5, cy + 4),
-               (cx + side * 9.5, cy + 4.5), (cx + side * 7, cy + 4.5), (cx + side * 8, cy + 5)], "b")
-    for x in range(int(cx - 5), int(cx + 6)):
-        if abs(x - cx) <= 4:
-            cv.set(x, cy + 7, "b")
-        if (x - int(cx)) % 2 == 0 and abs(x - cx) <= 4:
-            cv.set(x, cy + 8, "b")
-    # big wide-set eyes
-    eyes(cv, cx, int(cy - 2), eye, 4.5, 3)
-    if eye == "sad":
-        for side in (-1, 1):
-            bx = cx + side * 4.5
-            cv.px([(bx - side * 1.5, cy - 4.5), (bx + side * 0.5, cy - 5)], "o")
-    # short button nose right under the eyes
-    cv.px([(cx - 1, cy + 0.5), (cx, cy + 0.5), (cx + 1, cy + 0.5), (cx - 1, cy + 1.5), (cx, cy + 1.5),
-           (cx + 1, cy + 1.5)], "k")
-    cv.set(cx - 1, cy + 0.5, "o")
-    if blush:
-        cv.set(cx - 6, cy + 1, "h")
-        cv.set(cx + 6, cy + 1, "h")
-    my = cy + 4
-    if mouth == "smile":
-        cv.px([(cx - 2, my), (cx - 1, my + 1), (cx, my + 1), (cx + 1, my + 1), (cx + 2, my)], "o")
-        cv.set(cx, my, "w")          # the signature underbite tooth
-    elif mouth == "tongue":
-        cv.px([(cx - 2, my), (cx - 1, my + 1), (cx, my + 1), (cx + 1, my + 1), (cx + 2, my)], "o")
-        cv.px([(cx - 1, my + 2), (cx, my + 2), (cx, my + 3)], "p")
-    elif mouth == "open":
-        cv.px([(cx - 2, my), (cx - 1, my), (cx, my), (cx + 1, my), (cx + 2, my), (cx - 2, my + 1),
-               (cx + 2, my + 1), (cx - 1, my + 2), (cx, my + 2), (cx + 1, my + 2)], "o")
-        cv.px([(cx - 1, my + 1), (cx, my + 1), (cx + 1, my + 1)], "p")
-    elif mouth == "frown":
-        cv.px([(cx - 2, my + 1), (cx - 1, my), (cx, my), (cx + 1, my), (cx + 2, my + 1)], "o")
-
-
 def golden_head(cv, cx, cy, eye="open", mouth="smile", ear="normal", blush=False):
     if ear == "perk":
         cv.ellipse(cx - 8, cy - 4, 2.6, 4.0, "d", angle=0.5)
@@ -398,9 +339,7 @@ def sitting(head, kind="dog", cx=16, dy=0, eye="open", mouth="smile", ear="norma
         cat_tail(cv, cx + 6, by + 4, tail_a)
     else:
         dog_tail(cv, cx + 7.5, by + 1, tail_a)
-    small = head is griffon_head
-    cv.ellipse(cx, by + (0.6 if small else 0), 6.4 if kind == "cat" else (5.8 if small else 6.6),
-               5.6 if small else 6.2, "t")
+    cv.ellipse(cx, by, 6.4 if kind == "cat" else 6.6, 6.2, "t")
     if belly:
         cv.ellipse(cx, by + 1.2, 3.4, 4.2, "b", outline=False)
     if kind == "cat":
@@ -421,7 +360,7 @@ def sitting(head, kind="dog", cx=16, dy=0, eye="open", mouth="smile", ear="norma
     if not belly:  # toe lines on dark paws
         for px_ in (cx - 3.2, cx + 3.2):
             cv.set(px_, by + 6.4, "d")
-    head(cv, cx, (10.5 if head is griffon_head else 10) + dy + bob, eye=eye, mouth=mouth, ear=ear, blush=blush)
+    head(cv, cx, 10 + dy + bob, eye=eye, mouth=mouth, ear=ear, blush=blush)
     if kind == "dog":
         y = 18 + dy + bob
         for x in range(int(cx - 4), int(cx + 5)):
@@ -483,6 +422,163 @@ def animal(head, kind, belly):
     for i in range(2):
         cv = S(dy=i, eye="sad", mouth="frown", ear="flat", tail_a=1.6 if kind != "cat" else 1.2)
         sweat(cv, 25, 5 + i)
+        fl.append(cv.rows())
+    f["failed"] = fl
+    return f
+
+
+# ---------- griffon belge ----------
+# Big round head, huge wide-set eyes, tiny upturned nose between them, flat face
+# with a beard "bib" and an underbite, bushy brows, small semi-erect ears,
+# compact little body.
+
+def griffon_eye(cv, x0, y0, kind):
+    """4×4 eye with its top-left pixel at (x0, y0)."""
+    if kind in ("open", "wide"):
+        shape = [".kk.", "kwek", "keek", ".kk."]
+        if kind == "wide":
+            shape = ["kkkk", "kwek", "keek", "kkkk"]
+        for dy, row in enumerate(shape):
+            for dx, ch in enumerate(row):
+                if ch != ".":
+                    cv.set(x0 + dx, y0 + dy, ch)
+    elif kind == "closed":
+        cv.px([(x0, y0 + 2), (x0 + 1, y0 + 3), (x0 + 2, y0 + 3), (x0 + 3, y0 + 2)], "k")
+    elif kind == "happy":
+        cv.px([(x0, y0 + 3), (x0 + 1, y0 + 2), (x0 + 2, y0 + 2), (x0 + 3, y0 + 3)], "k")
+    elif kind == "sad":
+        for dy, row in enumerate(["....", "kkkk", "kwek", ".kk."]):
+            for dx, ch in enumerate(row):
+                if ch != ".":
+                    cv.set(x0 + dx, y0 + dy, ch)
+
+
+def griffon_head(cv, cx, cy, eye="open", mouth="smile", ear="normal", blush=False):
+    # ears: small, set high on the corners, tips folding forward/outward
+    tilt = {"normal": 0.55, "perk": 0.25, "flap": 0.95, "flat": 1.35}[ear]
+    lift = {"normal": 0, "perk": -1, "flap": 0, "flat": 2}[ear]
+    for side in (-1, 1):
+        cv.ellipse(cx + side * 7.2, cy - 5.6 + lift, 2.0, 2.8, "d", angle=-side * tilt)
+    # head: big and round
+    cv.ellipse(cx, cy, 9.6, 8.0, "t")
+    # light beard mask: rises up between the eyes (so the black nose reads) and hangs past the chin
+    cv.ellipse(cx, cy + 4.6, 6.0, 4.4, "m", outline=False)
+    cv.ellipse(cx, cy + 0.6, 2.2, 2.2, "m", outline=False)
+    for x in range(int(cx - 5.5), int(cx + 6.5)):
+        d = abs(x - cx)
+        if d < 5:
+            cv.set(x, cy + 8.6, "m")
+        if d < 4 and int(x) % 2 == 0:
+            cv.set(x, cy + 9.6, "m")
+    # moustache flaring sideways past the cheeks
+    for side in (-1, 1):
+        cv.px([(cx + side * 6.5, cy + 4), (cx + side * 7.5, cy + 5), (cx + side * 7.5, cy + 6),
+               (cx + side * 6.5, cy + 7)], "m")
+    # eyes: huge, wide-set
+    ey = int(round(cy - 2.5))
+    left_x0, right_x0 = int(round(cx - 6.5)), int(round(cx + 2.5))
+    griffon_eye(cv, left_x0, ey, eye)
+    griffon_eye(cv, right_x0, ey, eye)
+    # long bushy brows sweeping outward
+    for side, x0 in ((-1, left_x0), (1, right_x0)):
+        if eye == "sad":
+            pts = [(x0 + (0 if side < 0 else 3), ey - 1), (x0 + 1.5, ey - 1.5), (x0 + (3 if side < 0 else 0), ey - 2)]
+        else:
+            pts = [(x0 + (3 if side < 0 else 0), ey - 1), (x0 + 1.5, ey - 2), (x0 + (0 if side < 0 else 3), ey - 2),
+                   (x0 + (-1 if side < 0 else 4), ey - 1.5)]
+        cv.px(pts, "m")
+    # tiny upturned nose, high, right between the eyes
+    ny = ey + 3
+    cv.px([(cx - 1.5, ny), (cx - 0.5, ny), (cx + 0.5, ny), (cx + 1.5, ny), (cx - 1.5, ny + 1), (cx - 0.5, ny + 1),
+           (cx + 0.5, ny + 1), (cx + 1.5, ny + 1), (cx - 0.5, ny + 2), (cx + 0.5, ny + 2)], "k")
+    cv.set(cx - 0.5, ny, "w")
+    if blush:
+        cv.set(cx - 7.5, cy + 2, "h")
+        cv.set(cx + 7.5, cy + 2, "h")
+    # mouth inside the beard: underbite with two little teeth
+    my = int(round(cy + 5.5))
+    if mouth == "smile":
+        cv.px([(cx - 2.5, my), (cx - 1.5, my + 1), (cx - 0.5, my + 1), (cx + 0.5, my + 1), (cx + 1.5, my + 1),
+               (cx + 2.5, my)], "o")
+        cv.px([(cx - 1.5, my), (cx + 1.5, my)], "w")
+    elif mouth == "tongue":
+        cv.px([(cx - 2.5, my), (cx - 1.5, my + 1), (cx - 0.5, my + 1), (cx + 0.5, my + 1), (cx + 1.5, my + 1),
+               (cx + 2.5, my)], "o")
+        cv.px([(cx - 1.5, my), (cx + 1.5, my)], "w")
+        cv.px([(cx - 0.5, my + 2), (cx + 0.5, my + 2), (cx - 0.5, my + 3), (cx + 0.5, my + 3)], "p")
+    elif mouth == "open":
+        cv.px([(cx - 1.5, my), (cx - 0.5, my), (cx + 0.5, my), (cx + 1.5, my), (cx - 2.5, my + 1),
+               (cx + 2.5, my + 1), (cx - 1.5, my + 2), (cx + 1.5, my + 2), (cx - 0.5, my + 3), (cx + 0.5, my + 3)], "o")
+        cv.px([(cx - 1.5, my + 1), (cx - 0.5, my + 1), (cx + 0.5, my + 1), (cx + 1.5, my + 1),
+               (cx - 0.5, my + 2), (cx + 0.5, my + 2)], "p")
+    elif mouth == "frown":
+        cv.px([(cx - 2.5, my + 1), (cx - 1.5, my), (cx - 0.5, my), (cx + 0.5, my), (cx + 1.5, my),
+               (cx + 2.5, my + 1)], "o")
+
+
+def griffon_sitting(cx=15.5, dy=0, eye="open", mouth="smile", ear="normal", tail_a=0.4,
+                    paw="down", blush=False, bob=0):
+    cv = Canvas()
+    by = 24 + dy
+    # short tail carried high
+    cv.ellipse(cx + 6.2, by - 2.5, 1.3, 2.6, "t", angle=tail_a)
+    # compact body
+    cv.ellipse(cx, by, 6.0, 5.4, "t")
+    cv.px([(cx - 2.5, by - 1), (cx + 2.5, by - 1), (cx - 1.5, by + 1), (cx + 1.5, by + 1)], "d")  # coat texture
+    lp = {"down": (4.8, 4.8), "left": (4.0, 5.0), "right": (5.0, 4.0), "raised": (4.8, None)}[paw]
+    for side, ly in ((-1, lp[0]), (1, lp[1])):
+        if ly is not None:
+            cv.ellipse(cx + side * 2.8, by + ly, 1.8, 1.3, "t")
+            cv.set(cx + side * 2.8, by + ly + 0.6, "d")
+    if paw == "raised":
+        cv.ellipse(cx + 6.0, by - 2.0, 1.6, 1.6, "t")
+    cy = 10.5 + dy + bob
+    griffon_head(cv, cx, cy, eye=eye, mouth=mouth, ear=ear, blush=blush)
+    # collar peeking out beside the beard
+    y = int(round(cy + 8.5))
+    for x in range(int(cx - 6), int(cx + 7)):
+        if cv.get(x, y) == "t":
+            cv.set(x, y, "r")
+    return cv
+
+
+def griffon_lying(z_phase=0, breathe=0):
+    cv = Canvas()
+    cv.ellipse(26, 25.5, 1.3, 2.4, "t", angle=0.9)
+    cv.ellipse(20, 26 - breathe * 0.4, 8.6, 4.6 + breathe * 0.4, "t")
+    cv.px([(18, 24), (22, 25), (25, 24)], "d")
+    cv.ellipse(7, 29.6, 2.2, 1.3, "t")
+    cv.ellipse(15, 29.6, 2.2, 1.3, "t")
+    griffon_head(cv, 11.5, 20, eye="closed", mouth="smile", blush=True)
+    zs(cv, z_phase)
+    return cv
+
+
+def griffon_frames():
+    S = griffon_sitting
+    f = {}
+    f["idle"] = [griffon_lying(0, 0).rows(), griffon_lying(1, 1).rows(), griffon_lying(2, 0).rows()]
+    f["stretch"] = [S(eye="closed").rows(), S(eye="closed", mouth="open", ear="perk").rows(), S().rows()]
+    f["look"] = [S(cx=15.5 + dx, ear="perk").rows() for dx in (0, -1, -1, 0, 1, 1, 0)]
+    w = []
+    for i, (paw, bob, ear) in enumerate([("left", 0, "normal"), ("down", -1, "flap"),
+                                         ("right", 0, "normal"), ("down", -1, "flap")]):
+        cv = S(mouth="tongue", ear=ear, paw=paw, bob=bob, tail_a=0.1 if i % 2 else 0.7)
+        speed_lines(cv, i % 2)
+        w.append(cv.rows())
+    f["working"] = w
+    f["waiting"] = [S(eye="wide", mouth="open", ear="perk", paw="raised", tail_a=0.2).rows(),
+                    S(dy=-1, eye="wide", ear="perk", paw="raised", tail_a=0.8).rows()]
+    d = []
+    for i, a in enumerate((0.0, 0.6, 1.0, 0.6)):
+        cv = S(eye="happy", mouth="tongue", tail_a=a, blush=True)
+        sparkles(cv, i)
+        d.append(cv.rows())
+    f["done"] = d
+    fl = []
+    for i in range(2):
+        cv = S(dy=i, eye="sad", mouth="frown", ear="flat", tail_a=1.5)
+        sweat(cv, 27, 4 + i)
         fl.append(cv.rows())
     f["failed"] = fl
     return f
@@ -599,10 +695,10 @@ ORDER = ["idle", "stretch", "look", "working", "waiting", "done", "failed"]
 
 CHARACTERS = [
     # (id, display name, palette, frames builder)
-    ("pixel-dog", "Griffon (built-in)", GRIFFON, lambda: animal(griffon_head, "dog", belly=False)),
-    ("pixel-cat", "Cat (built-in)", CAT, lambda: animal(cat_head, "cat", belly=True)),
-    ("pixel-robot", "Robot (built-in)", ROBOT, robot_frames),
-    ("pixel-golden", "Golden Dog (built-in)", GOLDEN, lambda: animal(golden_head, "dog", belly=True)),
+    ("pixel-dog", "Gus|Griffon", GRIFFON, griffon_frames),
+    ("pixel-cat", "Mochi|Cat", CAT, lambda: animal(cat_head, "cat", belly=True)),
+    ("pixel-robot", "Bolt|Robot", ROBOT, robot_frames),
+    ("pixel-golden", "Sunny|Golden Dog", GOLDEN, lambda: animal(golden_head, "dog", belly=True)),
 ]
 
 
@@ -617,6 +713,7 @@ def write_swift(built):
            "struct PixelCharacter {",
            "    let id: String",
            "    let displayName: String",
+           "    let species: String",
            "    let palette: [Character: (UInt8, UInt8, UInt8)]",
            "    let frames: [String: [[String]]]",
            "}",
@@ -628,7 +725,9 @@ def write_swift(built):
     for cid, name, pal, frames in built:
         out.append("        PixelCharacter(")
         out.append(f'            id: "{cid}",')
-        out.append(f'            displayName: "{swift_string(name)}",')
+        pet_name, species = name.split("|")
+        out.append(f'            displayName: "{swift_string(pet_name)}",')
+        out.append(f'            species: "{swift_string(species)}",')
         out.append("            palette: [")
         for k, (r, g, b) in pal.items():
             out.append(f'                "{k}": ({r}, {g}, {b}),')
@@ -661,7 +760,7 @@ def write_preview(built, scale=5):
     dr = ImageDraw.Draw(img)
     y0 = pad
     for cid, name, pal, frames in built:
-        dr.text((8, y0), name, fill=(0, 0, 0))
+        dr.text((8, y0), name.replace("|", " — "), fill=(0, 0, 0))
         y0 += 20
         for state in ORDER:
             dr.text((8, y0 + H * scale // 2 - 6), state, fill=(60, 60, 60))

@@ -42,15 +42,18 @@ struct PetView: View {
 
     private var bubbleText: (title: String, message: String)? {
         guard let s = focus else { return nil }
-        let extra = store.sessions.filter { $0.state != .idle }.count - 1
-        let title = extra > 0 ? "\(s.project) +\(extra)" : s.project
+        let title = pet.art.displayName
+        // Only name the project when several sessions could be the one talking.
+        let several = store.sessions.filter { $0.state != .idle }.count > 1
+        let message: String
         switch store.state {
         case .idle: return nil
-        case .working: return (title, s.detail.map { "working… \($0)" } ?? "working…")
-        case .waiting: return (title, "needs you!")
-        case .done: return (title, "Done!")
-        case .failed: return (title, "something broke")
+        case .working: message = s.detail.map { "working… \($0)" } ?? "working…"
+        case .waiting: message = "needs you!"
+        case .done: message = "Done!"
+        case .failed: message = "something broke"
         }
+        return (title, several ? "\(s.project): \(message)" : message)
     }
 
     private var tint: Color {

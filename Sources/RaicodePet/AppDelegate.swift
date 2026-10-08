@@ -147,7 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         let petItem = NSMenuItem(title: "Pet", action: nil, keyEquivalent: "")
         let petMenu = NSMenu()
         for pet in pets {
-            let item = NSMenuItem(title: pet.displayName, action: #selector(choosePet(_:)), keyEquivalent: "")
+            let item = NSMenuItem(title: pet.menuTitle, action: #selector(choosePet(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = pet.id
             item.state = pet.id == controller.art.id ? .on : .off

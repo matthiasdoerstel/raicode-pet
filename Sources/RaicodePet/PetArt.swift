@@ -11,7 +11,10 @@ enum PetAnimation: String, CaseIterable {
 /// Anything that can supply frames for the pet: the built-in pixel dog or a Codex pet.
 protocol PetArt {
     var id: String { get }
+    /// The pet's name, shown in its speech bubble.
     var displayName: String { get }
+    /// How the pet is listed in the menu.
+    var menuTitle: String { get }
     /// Point size the pet is drawn at.
     var displaySize: CGSize { get }
     /// Pixel art wants nearest-neighbour; illustrations want smooth scaling.
@@ -26,6 +29,7 @@ final class PixelArt: PetArt {
     let character: PixelCharacter
     var id: String { character.id }
     var displayName: String { character.displayName }
+    var menuTitle: String { "\(character.displayName) — \(character.species)" }
     let displaySize = CGSize(width: 128, height: 128)  // 32px × 4, keeps pixels crisp
     let smoothScaling = false
 
@@ -94,6 +98,7 @@ final class CodexPetArt: PetArt {
 
     let id: String
     let displayName: String
+    var menuTitle: String { "\(displayName) — Codex pet" }
     let displaySize = CGSize(width: 144, height: 156)
     let smoothScaling = true
 

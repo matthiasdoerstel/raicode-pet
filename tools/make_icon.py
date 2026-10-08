@@ -36,7 +36,7 @@ def icon():
         t = y / (inner - 1)
         d.line([(0, y), (inner, y)], fill=tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)) + (255,))
 
-    rows = gs.sitting(gs.griffon_head, eye="happy", mouth="tongue", tail_a=0.8, blush=True, belly=False).rows()
+    rows = gs.griffon_sitting(eye="open", mouth="tongue", tail_a=0.6, blush=True).rows()
     dog = Image.new("RGBA", (gs.W, gs.H), (0, 0, 0, 0))
     for y, row in enumerate(rows):
         for x, ch in enumerate(row):
