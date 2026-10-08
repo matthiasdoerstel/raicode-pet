@@ -20,26 +20,31 @@ protocol PetArt {
     func frameDuration(_ animation: PetAnimation) -> TimeInterval
 }
 
-// MARK: - Built-in pixel dog
+// MARK: - Built-in pixel pets
 
-final class PixelDogArt: PetArt {
-    let id = "pixel-dog"
-    let displayName = "Pixel Dog (built-in)"
+final class PixelArt: PetArt {
+    let character: PixelCharacter
+    var id: String { character.id }
+    var displayName: String { character.displayName }
     let displaySize = CGSize(width: 128, height: 128)  // 32px × 4, keeps pixels crisp
     let smoothScaling = false
 
     private var cache: [String: [CGImage]] = [:]
+
+    init(_ character: PixelCharacter) {
+        self.character = character
+    }
 
     func frames(_ animation: PetAnimation) -> [CGImage] {
         let key: String
         switch animation {
         case .celebrate: key = "done"
         case .wave: key = "waiting"
-        case .lookAround: key = "stretch"
+        case .lookAround: key = character.frames["look"] == nil ? "stretch" : "look"
         default: key = animation.rawValue
         }
         if let cached = cache[key] { return cached }
-        let images = (DogSprites.frames[key] ?? []).compactMap(Self.render)
+        let images = (character.frames[key] ?? []).compactMap { render($0) }
         cache[key] = images
         return images
     }
@@ -47,7 +52,8 @@ final class PixelDogArt: PetArt {
     func frameDuration(_ animation: PetAnimation) -> TimeInterval {
         switch animation {
         case .idle: return 1.1
-        case .stretch, .lookAround: return 0.7
+        case .stretch: return 0.7
+        case .lookAround: return 0.45
         case .working: return 0.16
         case .waiting, .wave: return 0.35
         case .done, .celebrate: return 0.18
@@ -55,14 +61,14 @@ final class PixelDogArt: PetArt {
         }
     }
 
-    static func render(_ rows: [String]) -> CGImage? {
+    private func render(_ rows: [String]) -> CGImage? {
         let h = rows.count
         let w = rows.first?.count ?? 0
         guard w > 0 else { return nil }
         var bytes = [UInt8](repeating: 0, count: w * h * 4)
         for (y, row) in rows.enumerated() {
             for (x, ch) in row.enumerated() where x < w {
-                guard let (r, g, b) = DogSprites.palette[ch] else { continue }
+                guard let (r, g, b) = character.palette[ch] else { continue }
                 let i = (y * w + x) * 4
                 bytes[i] = r; bytes[i + 1] = g; bytes[i + 2] = b; bytes[i + 3] = 255
             }
@@ -197,10 +203,10 @@ enum PetLibrary {
                 home.appendingPathComponent(".codex/pets")]
     }
 
-    /// Installed Codex pets (deduplicated by id) followed by the built-in dog.
+    /// Built-in pixel pets first, then installed Codex pets (deduplicated by id).
     static func available() -> [PetArt] {
-        var seen = Set<String>()
-        var pets: [PetArt] = []
+        var pets: [PetArt] = PixelSprites.characters.map(PixelArt.init)
+        var seen = Set(pets.map(\.id))
         for root in folders {
             let dirs = (try? FileManager.default.contentsOfDirectory(
                 at: root, includingPropertiesForKeys: nil)) ?? []
@@ -209,14 +215,11 @@ enum PetLibrary {
                 pets.append(pet)
             }
         }
-        pets.append(PixelDogArt())
         return pets
     }
 
     static func selected(from pets: [PetArt]) -> PetArt {
         let saved = UserDefaults.standard.string(forKey: selectionKey)
-        return pets.first { $0.id == saved }
-            ?? pets.first { $0.id == "jin-mao" }
-            ?? pets[0]
+        return pets.first { $0.id == saved } ?? pets[0]
     }
 }

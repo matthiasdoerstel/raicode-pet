@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Generates the pixel-art dog frames.
+"""Generates the built-in pixel-art pets.
 
 Run:  python3 tools/gen_sprites.py
-Writes Sources/RaicodePet/DogSprites.swift (the grids the app renders) and
-tools/preview.png (every frame, scaled up, for review).
+Writes Sources/RaicodePet/PixelSprites.swift (the grids the app renders) and
+tools/preview.png (every frame of every pet, scaled up, for review).
 
-Once you like the art you can also edit the grids in DogSprites.swift by hand —
-but re-running this script overwrites them.
+You can also tweak the grids in PixelSprites.swift by hand — but re-running
+this script overwrites them.
 """
 import math
 import os
@@ -14,19 +14,66 @@ import os
 W, H = 32, 32
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Legend — keep in sync with the palette in DogSprites.swift
-PALETTE = {
-    "o": (58, 38, 30),     # outline
-    "t": (226, 166, 102),  # tan coat
-    "d": (184, 118, 66),   # dark tan (ears, shading)
-    "c": (252, 236, 210),  # cream (muzzle, belly, paws)
-    "k": (34, 24, 22),     # eyes / nose
-    "w": (255, 255, 255),  # eye highlight
+# Effect pixels never get an outline (sparkles, z's, sweat drops).
+EFFECTS = set("zyY")
+
+# ---------- palettes (one per character) ----------
+
+GRIFFON = {
+    "o": (16, 14, 20),     # outline
+    "t": (76, 72, 86),     # coat (black, a little lifted so the face reads)
+    "d": (36, 33, 42),     # ears / shading
+    "b": (156, 150, 164),  # beard, brows, chest fluff
+    "k": (6, 6, 8),        # eyes / nose
+    "w": (255, 255, 255),  # eye highlight / tooth
     "p": (240, 120, 140),  # tongue
-    "h": (246, 168, 160),  # cheek blush
+    "h": (210, 120, 130),  # blush
     "r": (214, 58, 52),    # collar
-    "y": (250, 204, 72),   # tag
+    "y": (250, 204, 72),   # tag / sparkles
     "z": (150, 170, 220),  # sleep z's / effects
+}
+
+GOLDEN = {
+    "o": (58, 38, 30),
+    "t": (226, 166, 102),
+    "d": (184, 118, 66),
+    "b": (252, 236, 210),  # cream
+    "k": (34, 24, 22),
+    "w": (255, 255, 255),
+    "p": (240, 120, 140),
+    "h": (246, 168, 160),
+    "r": (214, 58, 52),
+    "y": (250, 204, 72),
+    "z": (150, 170, 220),
+}
+
+CAT = {
+    "o": (74, 42, 30),
+    "t": (244, 164, 86),   # ginger
+    "d": (212, 114, 52),   # stripes
+    "b": (254, 238, 214),  # cream
+    "k": (30, 22, 20),
+    "g": (120, 196, 96),   # eyes
+    "w": (255, 255, 255),
+    "p": (244, 132, 152),  # nose, inner ears
+    "h": (250, 170, 160),
+    "y": (250, 204, 72),
+    "z": (150, 170, 220),
+}
+
+ROBOT = {
+    "o": (42, 48, 66),
+    "s": (230, 236, 244),  # shell
+    "g": (164, 174, 194),  # panels
+    "n": (34, 42, 66),     # screen
+    "e": (120, 236, 255),  # eye glow
+    "a": (255, 160, 60),   # antenna: waiting
+    "G": (96, 214, 124),   # antenna: done
+    "R": (240, 92, 82),    # antenna: failed
+    "y": (250, 204, 72),   # antenna: working / sparkles
+    "Y": (250, 204, 72),
+    "w": (255, 255, 255),
+    "z": (150, 170, 220),
 }
 
 
@@ -42,152 +89,81 @@ class Canvas:
     def get(self, x, y):
         return self.g[y][x] if 0 <= x < W and 0 <= y < H else "."
 
+    def shape(self, inside, c, outline=True):
+        """Fill every pixel where inside(x, y); optionally ring it with outline first."""
+        mask = {(x, y) for y in range(H) for x in range(W) if inside(x, y)}
+        if outline:
+            for x, y in mask:
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if (nx, ny) not in mask:
+                        self.set(nx, ny, "o")
+        for x, y in mask:
+            self.g[y][x] = c
+
     def ellipse(self, cx, cy, rx, ry, c, outline=True, angle=0.0):
-        """Filled ellipse; with outline=True a 1px outline ring is drawn first."""
         ca, sa = math.cos(angle), math.sin(angle)
 
-        def inside(x, y, grow):
+        def inside(x, y):
             dx, dy = x - cx, y - cy
             u = dx * ca + dy * sa
             v = -dx * sa + dy * ca
-            return (u / (rx + grow)) ** 2 + (v / (ry + grow)) ** 2 <= 1.0
+            return (u / rx) ** 2 + (v / ry) ** 2 <= 1.0
 
-        if outline:
-            for y in range(H):
-                for x in range(W):
-                    if inside(x, y, 1.0) and not inside(x, y, 0):
-                        self.g[y][x] = "o"
-        for y in range(H):
-            for x in range(W):
-                if inside(x, y, 0):
-                    self.g[y][x] = c
+        self.shape(inside, c, outline)
+
+    def poly(self, pts, c, outline=True):
+        def inside(x, y):
+            px, py = x, y
+            hit = False
+            j = len(pts) - 1
+            for i in range(len(pts)):
+                xi, yi = pts[i]
+                xj, yj = pts[j]
+                if (yi > py) != (yj > py) and px < (xj - xi) * (py - yi) / (yj - yi) + xi:
+                    hit = not hit
+                j = i
+            return hit
+
+        self.shape(inside, c, outline)
+
+    def rect(self, x0, y0, x1, y1, c, outline=True, round_corners=False):
+        def inside(x, y):
+            if not (x0 <= x <= x1 and y0 <= y <= y1):
+                return False
+            if round_corners and (x in (x0, x1)) and (y in (y0, y1)):
+                return False
+            return True
+
+        self.shape(inside, c, outline)
 
     def px(self, pts, c):
         for x, y in pts:
             self.set(x, y, c)
 
+    def finish(self):
+        """Outline anything still touching the background (beard fringes, whiskers, …)."""
+        add = []
+        for y in range(H):
+            for x in range(W):
+                c = self.g[y][x]
+                if c in ".o" or c in EFFECTS:
+                    continue
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if self.get(nx, ny) == "." and 0 <= nx < W and 0 <= ny < H:
+                        add.append((nx, ny))
+        for x, y in add:
+            self.g[y][x] = "o"
+        return self
+
     def rows(self):
-        return ["".join(r) for r in self.g]
+        return ["".join(r) for r in self.finish().g]
 
 
-# ---------- parts ----------
+# ---------- shared effects ----------
 
-def ears(cv, cx, cy, mood):
-    if mood == "perk":   # alert, ears lifted
-        cv.ellipse(cx - 8, cy - 4, 2.6, 4.0, "d", angle=0.5)
-        cv.ellipse(cx + 8, cy - 4, 2.6, 4.0, "d", angle=-0.5)
-    elif mood == "flat":  # sad, ears drooping low
-        cv.ellipse(cx - 9, cy + 2, 2.4, 4.6, "d", angle=-0.35)
-        cv.ellipse(cx + 9, cy + 2, 2.4, 4.6, "d", angle=0.35)
-    elif mood == "flap":  # mid-bounce
-        cv.ellipse(cx - 9, cy - 2, 2.6, 4.4, "d", angle=0.9)
-        cv.ellipse(cx + 9, cy - 2, 2.6, 4.4, "d", angle=-0.9)
-    else:                 # normal floppy
-        cv.ellipse(cx - 8.5, cy, 2.6, 4.6, "d", angle=0.25)
-        cv.ellipse(cx + 8.5, cy, 2.6, 4.6, "d", angle=-0.25)
-
-
-def head(cv, cx, cy, eyes="open", mouth="smile", ear="normal", blush=False):
-    ears(cv, cx, cy, ear)
-    cv.ellipse(cx, cy, 7.6, 6.4, "t")
-    # muzzle
-    cv.ellipse(cx, cy + 3.2, 3.6, 2.4, "c", outline=False)
-    # forehead blaze
-    cv.px([(cx, cy - 5), (cx, cy - 4), (cx, cy - 3)], "c")
-    # nose
-    cv.px([(cx - 1, cy + 1.4), (cx, cy + 1.4), (cx + 1, cy + 1.4), (cx, cy + 2.4)], "k")
-
-    ex = 3.6
-    ey = cy - 0.6
-    for side in (-1, 1):
-        x = cx + side * ex
-        if eyes == "open":
-            x0 = int(round(x - 0.5))
-            cv.px([(x0, ey), (x0 + 1, ey), (x0, ey + 1), (x0 + 1, ey + 1)], "k")
-            cv.set(x0, ey, "w")
-        elif eyes == "closed":
-            cv.px([(x - 1, ey + 1), (x, ey + 1), (x + 1, ey + 1)], "k")
-        elif eyes == "happy":
-            cv.px([(x - 1, ey + 1), (x, ey), (x + 1, ey + 1)], "k")
-        elif eyes == "sad":
-            cv.px([(x, ey), (x, ey + 1)], "k")
-            # slanted brow
-            cv.px([(x - side, ey - 2), (x, ey - 1.6)], "o")
-
-    if blush:
-        cv.set(cx - 5, cy + 2, "h")
-        cv.set(cx + 5, cy + 2, "h")
-
-    my = cy + 4.4
-    if mouth == "smile":
-        cv.px([(cx - 1, my), (cx + 1, my)], "o")
-    elif mouth == "tongue":
-        cv.px([(cx - 1, my), (cx + 1, my)], "o")
-        cv.px([(cx, my), (cx, my + 1), (cx + 1, my + 1)], "p")
-    elif mouth == "open":   # yawn / bark
-        cv.px([(cx - 1, my), (cx, my), (cx + 1, my), (cx - 1, my + 1), (cx + 1, my + 1)], "o")
-        cv.px([(cx, my + 1)], "p")
-    elif mouth == "frown":
-        cv.px([(cx - 1, my + 1), (cx, my), (cx + 1, my + 1)], "o")
-
-
-def collar(cv, cx, y):
-    for x in range(int(cx - 4), int(cx + 5)):
-        if cv.get(x, y) != ".":
-            cv.set(x, y, "r")
-    cv.set(cx, y + 1, "y")
-
-
-def tail(cv, x, y, angle):
-    cv.ellipse(x, y, 1.6, 3.6, "t", angle=angle)
-    tip_x = x + math.sin(angle) * 3.2
-    tip_y = y - math.cos(angle) * 3.2
-    cv.set(tip_x, tip_y, "c")
-
-
-def sitting(cx=16, dy=0, eyes="open", mouth="smile", ear="normal", tail_a=0.5,
-            paw="down", blush=False, bob=0):
-    cv = Canvas()
-    by = 23 + dy
-    tail(cv, cx + 7.5, by + 1, tail_a)
-    # body
-    cv.ellipse(cx, by, 6.6, 6.2, "t")
-    cv.ellipse(cx, by + 1.2, 3.6, 4.2, "c", outline=False)
-    # paws
-    if paw == "raised":
-        cv.ellipse(cx - 3.2, by + 5.6, 2.0, 1.4, "c")
-        cv.ellipse(cx + 5.0, by - 1.4, 1.8, 1.8, "c")   # waving paw beside chest
-    elif paw == "left":
-        cv.ellipse(cx - 3.2, by + 4.8, 2.0, 1.4, "c")
-        cv.ellipse(cx + 3.2, by + 5.8, 2.0, 1.4, "c")
-    elif paw == "right":
-        cv.ellipse(cx - 3.2, by + 5.8, 2.0, 1.4, "c")
-        cv.ellipse(cx + 3.2, by + 4.8, 2.0, 1.4, "c")
-    else:
-        cv.ellipse(cx - 3.2, by + 5.6, 2.0, 1.4, "c")
-        cv.ellipse(cx + 3.2, by + 5.6, 2.0, 1.4, "c")
-    head(cv, cx, 10 + dy + bob, eyes=eyes, mouth=mouth, ear=ear, blush=blush)
-    collar(cv, cx, 17 + dy + bob)
-    return cv
-
-
-def sleeping(z_phase=0, breathe=0):
-    cv = Canvas()
-    # tail curled in front
-    cv.ellipse(25, 28, 4.2, 1.6, "t", angle=-0.15)
-    # body lying
-    cv.ellipse(19.5, 25 - breathe * 0.4, 9.6, 4.8 + breathe * 0.4, "t")
-    cv.ellipse(21.5, 26.5, 5.2, 2.2, "c", outline=False)
-    # front paws stretched forward under head
-    cv.ellipse(8.5, 29, 2.4, 1.4, "c")
-    cv.ellipse(12.5, 29.4, 2.4, 1.4, "c")
-    # head resting low on the left
-    head(cv, 11, 22, eyes="closed", mouth="smile", ear="normal", blush=True)
-    collar(cv, 11, 29)
-    # floating z's
-    zs = [(21, 12), (24, 7), (27, 2)]
-    for i, (zx, zy) in enumerate(zs):
-        if (i + z_phase) % 3 == 2:
+def zs(cv, phase, spots=((21, 12), (24, 7), (27, 2))):
+    for i, (zx, zy) in enumerate(spots):
+        if (i + phase) % 3 == 2:
             continue
         size = 2 + (i > 0)
         for dx in range(size + 1):
@@ -195,134 +171,524 @@ def sleeping(z_phase=0, breathe=0):
             cv.set(zx + dx, zy + size, "z")
         for d in range(size + 1):
             cv.set(zx + size - d, zy + d, "z")
-    return cv
 
 
-def add_sweat(cv, x, y):
-    cv.px([(x, y), (x, y + 1), (x - 1, y + 1)], "z")
-
-
-def add_lines(cv, phase):
-    # speed lines left of the dog
+def speed_lines(cv, phase):
     y0 = 20 + phase
     for i, y in enumerate((y0, y0 + 3, y0 + 6)):
         for dx in range(2 + (i % 2)):
-            cv.set(2 + dx, y, "z")
+            cv.set(1 + dx, y, "z")
 
 
-def add_sparkle(cv, x, y):
-    cv.px([(x, y - 1), (x - 1, y), (x, y), (x + 1, y), (x, y + 1)], "y")
+def sparkles(cv, i):
+    pts = [(3, 6), (28, 4)] if i % 2 == 0 else [(4, 3), (28, 9)]
+    for x, y in pts:
+        for dx, dy in ((0, -1), (-1, 0), (0, 0), (1, 0), (0, 1)):
+            if cv.get(x + dx, y + dy) == ".":
+                cv.set(x + dx, y + dy, "y")
 
 
-# ---------- frames per state ----------
+def sweat(cv, x, y):
+    cv.px([(x, y), (x, y + 1), (x - 1, y + 1), (x, y + 2)], "z")
 
-def frames():
+
+# ---------- faces ----------
+
+def eyes(cv, cx, ey, kind, spread, size, iris="k"):
+    for side in (-1, 1):
+        x = cx + side * spread
+        x0 = int(round(x - size / 2))
+        if kind == "open":
+            for dx in range(size):
+                for dy in range(size):
+                    cv.set(x0 + dx, ey + dy, iris)
+            if iris != "k":  # pupil
+                cv.set(x0 + size // 2, ey + size // 2, "k")
+                if size > 2:
+                    cv.set(x0 + size // 2, ey + size // 2 - 1, "k")
+            cv.set(x0, ey, "w")
+            if size >= 3:
+                cv.set(x0 + size - 1, ey + size - 1, "w")
+        elif kind == "closed":
+            for dx in range(size + 1):
+                cv.set(x0 + dx - (side < 0), ey + size - 1, "k")
+        elif kind == "happy":
+            for dx in range(size + 1):
+                d = abs(dx - size / 2)
+                cv.set(x0 + dx - (side < 0), ey + size - 1 - (1 if d < 1 else 0) + (0 if d < size / 2 else 0), "k")
+        elif kind == "sad":
+            for dx in range(size):
+                cv.set(x0 + dx, ey + size - 1, "k")
+                if size >= 3:
+                    cv.set(x0 + dx, ey + size - 2, "k")
+            cv.set(x0, ey + size - 2, "w")
+
+
+def griffon_head(cv, cx, cy, eye="open", mouth="smile", ear="normal", blush=False):
+    # small "rose" ears set high and wide, tips folding outward
+    if ear == "perk":
+        L, tip = [(cx - 8.5, cy - 3), (cx - 8, cy - 9.5), (cx - 4.5, cy - 6.5)], (cx - 9, cy - 9)
+    elif ear == "flat":
+        L, tip = [(cx - 8, cy - 2), (cx - 11.5, cy - 4.5), (cx - 5.5, cy - 5.5)], (cx - 12, cy - 3.5)
+    elif ear == "flap":
+        L, tip = [(cx - 8.5, cy - 3), (cx - 10.5, cy - 8.5), (cx - 4.5, cy - 6.5)], (cx - 11, cy - 7.5)
+    else:
+        L, tip = [(cx - 8.5, cy - 3), (cx - 9, cy - 8.5), (cx - 4.5, cy - 6.5)], (cx - 10, cy - 7.5)
+    for side in (-1, 1):
+        m = (lambda pts: [(2 * cx - x, y) for x, y in pts]) if side == 1 else (lambda pts: pts)
+        cv.poly(m(L), "d")
+        tx, ty = m([tip])[0]
+        cv.set(tx, ty, "d")
+    # big round domed head with a few rough-coat tufts on top
+    cv.ellipse(cx, cy, 9.2, 7.6, "t")
+    cv.px([(cx - 3, cy - 8), (cx, cy - 8), (cx + 3, cy - 8)], "t")
+    # brows: lighter tufts
+    for side in (-1, 1):
+        bx = cx + side * 4.5
+        cv.px([(bx - 1.5, cy - 4), (bx - 0.5, cy - 4.5), (bx + 0.5, cy - 4.5), (bx + 1.5, cy - 4)], "b")
+    # beard: wide muzzle, moustache flaring past the cheeks, shaggy fringe below
+    cv.ellipse(cx, cy + 3.8, 5.6, 3.0, "b", outline=False)
+    for side in (-1, 1):
+        cv.px([(cx + side * 6.5, cy + 3), (cx + side * 7.5, cy + 3.5), (cx + side * 8.5, cy + 4),
+               (cx + side * 9.5, cy + 4.5), (cx + side * 7, cy + 4.5), (cx + side * 8, cy + 5)], "b")
+    for x in range(int(cx - 5), int(cx + 6)):
+        if abs(x - cx) <= 4:
+            cv.set(x, cy + 7, "b")
+        if (x - int(cx)) % 2 == 0 and abs(x - cx) <= 4:
+            cv.set(x, cy + 8, "b")
+    # big wide-set eyes
+    eyes(cv, cx, int(cy - 2), eye, 4.5, 3)
+    if eye == "sad":
+        for side in (-1, 1):
+            bx = cx + side * 4.5
+            cv.px([(bx - side * 1.5, cy - 4.5), (bx + side * 0.5, cy - 5)], "o")
+    # short button nose right under the eyes
+    cv.px([(cx - 1, cy + 0.5), (cx, cy + 0.5), (cx + 1, cy + 0.5), (cx - 1, cy + 1.5), (cx, cy + 1.5),
+           (cx + 1, cy + 1.5)], "k")
+    cv.set(cx - 1, cy + 0.5, "o")
+    if blush:
+        cv.set(cx - 6, cy + 1, "h")
+        cv.set(cx + 6, cy + 1, "h")
+    my = cy + 4
+    if mouth == "smile":
+        cv.px([(cx - 2, my), (cx - 1, my + 1), (cx, my + 1), (cx + 1, my + 1), (cx + 2, my)], "o")
+        cv.set(cx, my, "w")          # the signature underbite tooth
+    elif mouth == "tongue":
+        cv.px([(cx - 2, my), (cx - 1, my + 1), (cx, my + 1), (cx + 1, my + 1), (cx + 2, my)], "o")
+        cv.px([(cx - 1, my + 2), (cx, my + 2), (cx, my + 3)], "p")
+    elif mouth == "open":
+        cv.px([(cx - 2, my), (cx - 1, my), (cx, my), (cx + 1, my), (cx + 2, my), (cx - 2, my + 1),
+               (cx + 2, my + 1), (cx - 1, my + 2), (cx, my + 2), (cx + 1, my + 2)], "o")
+        cv.px([(cx - 1, my + 1), (cx, my + 1), (cx + 1, my + 1)], "p")
+    elif mouth == "frown":
+        cv.px([(cx - 2, my + 1), (cx - 1, my), (cx, my), (cx + 1, my), (cx + 2, my + 1)], "o")
+
+
+def golden_head(cv, cx, cy, eye="open", mouth="smile", ear="normal", blush=False):
+    if ear == "perk":
+        cv.ellipse(cx - 8, cy - 4, 2.6, 4.0, "d", angle=0.5)
+        cv.ellipse(cx + 8, cy - 4, 2.6, 4.0, "d", angle=-0.5)
+    elif ear == "flat":
+        cv.ellipse(cx - 9, cy + 2, 2.4, 4.6, "d", angle=-0.35)
+        cv.ellipse(cx + 9, cy + 2, 2.4, 4.6, "d", angle=0.35)
+    elif ear == "flap":
+        cv.ellipse(cx - 9, cy - 2, 2.6, 4.4, "d", angle=0.9)
+        cv.ellipse(cx + 9, cy - 2, 2.6, 4.4, "d", angle=-0.9)
+    else:
+        cv.ellipse(cx - 8.5, cy, 2.6, 4.6, "d", angle=0.25)
+        cv.ellipse(cx + 8.5, cy, 2.6, 4.6, "d", angle=-0.25)
+    cv.ellipse(cx, cy, 7.6, 6.4, "t")
+    cv.ellipse(cx, cy + 3.2, 3.6, 2.4, "b", outline=False)
+    cv.px([(cx, cy - 5), (cx, cy - 4), (cx, cy - 3)], "b")
+    cv.px([(cx - 1, cy + 1.4), (cx, cy + 1.4), (cx + 1, cy + 1.4), (cx, cy + 2.4)], "k")
+    eyes(cv, cx, int(round(cy - 0.6)), eye, 3.6, 2)
+    if eye == "sad":
+        for side in (-1, 1):
+            x = cx + side * 3.6
+            cv.px([(x - side, cy - 2.6), (x, cy - 2.2)], "o")
+    if blush:
+        cv.set(cx - 5, cy + 2, "h")
+        cv.set(cx + 5, cy + 2, "h")
+    my = cy + 4.4
+    if mouth == "smile":
+        cv.px([(cx - 1, my), (cx + 1, my)], "o")
+    elif mouth == "tongue":
+        cv.px([(cx - 1, my), (cx + 1, my)], "o")
+        cv.px([(cx, my), (cx, my + 1), (cx + 1, my + 1)], "p")
+    elif mouth == "open":
+        cv.px([(cx - 1, my), (cx, my), (cx + 1, my), (cx - 1, my + 1), (cx + 1, my + 1)], "o")
+        cv.px([(cx, my + 1)], "p")
+    elif mouth == "frown":
+        cv.px([(cx - 1, my + 1), (cx, my), (cx + 1, my + 1)], "o")
+
+
+def cat_head(cv, cx, cy, eye="open", mouth="smile", ear="normal", blush=False):
+    if ear == "perk":
+        L, Li = [(cx - 7.5, cy - 1), (cx - 6.5, cy - 10), (cx - 1.5, cy - 5)], [(cx - 6, cy - 3), (cx - 5.8, cy - 7.5), (cx - 3.5, cy - 5)]
+    elif ear == "flat":
+        L, Li = [(cx - 7, cy - 2), (cx - 10, cy - 6.5), (cx - 3.5, cy - 5.5)], [(cx - 6.5, cy - 3.5), (cx - 8.5, cy - 5.8), (cx - 5, cy - 5)]
+    elif ear == "flap":
+        L, Li = [(cx - 7.5, cy - 1), (cx - 8.5, cy - 9), (cx - 2, cy - 5)], [(cx - 6.5, cy - 3), (cx - 7.2, cy - 6.8), (cx - 4, cy - 5)]
+    else:
+        L, Li = [(cx - 7.5, cy - 1), (cx - 7, cy - 9), (cx - 2, cy - 5)], [(cx - 6.2, cy - 3), (cx - 6, cy - 6.8), (cx - 3.8, cy - 5)]
+    for side in (-1, 1):
+        mirror = (lambda pts: [(cx + (cx - x), y) for x, y in pts]) if side == 1 else (lambda pts: pts)
+        cv.poly(mirror(L), "t")
+        cv.poly(mirror(Li), "p", outline=False)
+    cv.ellipse(cx, cy, 7.8, 6.2, "t")
+    # tabby stripes
+    cv.px([(cx, cy - 5), (cx, cy - 4), (cx - 2, cy - 5), (cx + 2, cy - 5)], "d")
+    cv.px([(cx - 7, cy), (cx - 6, cy), (cx + 6, cy), (cx + 7, cy)], "d")
+    cv.ellipse(cx, cy + 3, 3.2, 2.0, "b", outline=False)
+    eyes(cv, cx, int(round(cy - 1)), eye, 3.8, 2 if eye != "open" else 3, iris="g")
+    if eye == "sad":
+        for side in (-1, 1):
+            x = cx + side * 3.8
+            cv.px([(x - side * 1.5, cy - 3), (x + side * 0.5, cy - 3.6)], "o")
+    cv.px([(cx - 1, cy + 1.6), (cx, cy + 1.6), (cx, cy + 2.4)], "p")
+    # whiskers
+    for side in (-1, 1):
+        for i in range(3):
+            cv.set(cx + side * (7 + i), cy + 2 + (i == 2) * side * 0, "o")
+            cv.set(cx + side * (7 + i), cy + 3.6 + i * 0.5, "o")
+    if blush:
+        cv.set(cx - 5, cy + 2, "h")
+        cv.set(cx + 5, cy + 2, "h")
+    my = cy + 3.4
+    if mouth in ("smile", "tongue"):
+        cv.px([(cx - 2, my), (cx - 1, my + 1), (cx, my), (cx + 1, my + 1), (cx + 2, my)], "o")
+        if mouth == "tongue":
+            cv.px([(cx, my + 1), (cx, my + 2)], "p")
+    elif mouth == "open":
+        cv.px([(cx - 1, my), (cx, my), (cx + 1, my), (cx - 1, my + 1), (cx + 1, my + 1), (cx, my + 2)], "o")
+        cv.px([(cx, my + 1)], "p")
+    elif mouth == "frown":
+        cv.px([(cx - 1, my + 1), (cx, my), (cx + 1, my + 1)], "o")
+
+
+# ---------- bodies ----------
+
+def dog_tail(cv, x, y, angle):
+    cv.ellipse(x, y, 1.6, 3.6, "t", angle=angle)
+    cv.set(x + math.sin(angle) * 3.2, y - math.cos(angle) * 3.2, "b")
+
+
+def cat_tail(cv, x, y, curl):
+    # a long tail sweeping up, drawn as a chain of round segments
+    pts = []
+    for i in range(10):
+        t = i / 9
+        px = x + 2.5 * t + math.sin(t * math.pi) * 1.5
+        py = y - 12 * t
+        px += curl * math.sin(t * math.pi * 1.4) * 2.2
+        pts.append((px, py))
+    for px, py in pts:
+        cv.ellipse(px, py, 1.4, 1.4, "t")
+    for px, py in pts:
+        cv.ellipse(px, py, 0.9, 0.9, "t", outline=False)
+    cv.set(pts[-1][0], pts[-1][1], "d")
+    cv.set(pts[5][0], pts[5][1], "d")
+
+
+def sitting(head, kind="dog", cx=16, dy=0, eye="open", mouth="smile", ear="normal", tail_a=0.5,
+            paw="down", blush=False, bob=0, belly=True):
+    cv = Canvas()
+    by = 23 + dy
+    if kind == "cat":
+        cat_tail(cv, cx + 6, by + 4, tail_a)
+    else:
+        dog_tail(cv, cx + 7.5, by + 1, tail_a)
+    small = head is griffon_head
+    cv.ellipse(cx, by + (0.6 if small else 0), 6.4 if kind == "cat" else (5.8 if small else 6.6),
+               5.6 if small else 6.2, "t")
+    if belly:
+        cv.ellipse(cx, by + 1.2, 3.4, 4.2, "b", outline=False)
+    if kind == "cat":
+        cv.px([(cx - 5, by - 1), (cx - 5, by + 1), (cx + 5, by - 1), (cx + 5, by + 1)], "d")
+    paw_c = "b" if belly else "t"
+    if paw == "raised":
+        cv.ellipse(cx - 3.2, by + 5.6, 2.0, 1.4, paw_c)
+        cv.ellipse(cx + 5.0, by - 1.4, 1.8, 1.8, paw_c)
+    elif paw == "left":
+        cv.ellipse(cx - 3.2, by + 4.8, 2.0, 1.4, paw_c)
+        cv.ellipse(cx + 3.2, by + 5.8, 2.0, 1.4, paw_c)
+    elif paw == "right":
+        cv.ellipse(cx - 3.2, by + 5.8, 2.0, 1.4, paw_c)
+        cv.ellipse(cx + 3.2, by + 4.8, 2.0, 1.4, paw_c)
+    else:
+        cv.ellipse(cx - 3.2, by + 5.6, 2.0, 1.4, paw_c)
+        cv.ellipse(cx + 3.2, by + 5.6, 2.0, 1.4, paw_c)
+    if not belly:  # toe lines on dark paws
+        for px_ in (cx - 3.2, cx + 3.2):
+            cv.set(px_, by + 6.4, "d")
+    head(cv, cx, (10.5 if head is griffon_head else 10) + dy + bob, eye=eye, mouth=mouth, ear=ear, blush=blush)
+    if kind == "dog":
+        y = 18 + dy + bob
+        for x in range(int(cx - 4), int(cx + 5)):
+            if cv.get(x, y) not in ".o":
+                cv.set(x, y, "r")
+        cv.set(cx, y + 1, "y")
+    return cv
+
+
+def lying(head, kind="dog", z_phase=0, breathe=0, belly=True):
+    cv = Canvas()
+    if kind == "cat":
+        cv.ellipse(23, 28.4, 6.0, 1.4, "t", angle=-0.1)
+        cv.px([(20, 28), (24, 28)], "d")
+    else:
+        cv.ellipse(25, 28, 4.2, 1.6, "t", angle=-0.15)
+    cv.ellipse(19.5, 25 - breathe * 0.4, 9.6, 4.8 + breathe * 0.4, "t")
+    if belly:
+        cv.ellipse(21.5, 26.5, 5.2, 2.2, "b", outline=False)
+    if kind == "cat":
+        cv.px([(17, 21), (18, 21), (21, 21), (22, 21)], "d")
+    paw_c = "b" if belly else "t"
+    cv.ellipse(8.5, 29, 2.4, 1.4, paw_c)
+    cv.ellipse(12.5, 29.4, 2.4, 1.4, paw_c)
+    head(cv, 11, 22, eye="closed", mouth="smile", ear="normal", blush=True)
+    zs(cv, z_phase)
+    return cv
+
+
+def animal(head, kind, belly):
+    S = lambda **k: sitting(head, kind=kind, belly=belly, **k)
     f = {}
-    f["idle"] = [sleeping(0, 0).rows(), sleeping(1, 1).rows(), sleeping(2, 0).rows()]
-    f["stretch"] = [
-        sitting(eyes="closed", mouth="smile").rows(),
-        sitting(eyes="closed", mouth="open", ear="perk").rows(),
-        sitting(eyes="open", mouth="smile").rows(),
-    ]
+    f["idle"] = [lying(head, kind, 0, 0, belly).rows(), lying(head, kind, 1, 1, belly).rows(),
+                 lying(head, kind, 2, 0, belly).rows()]
+    f["stretch"] = [S(eye="closed").rows(), S(eye="closed", mouth="open", ear="perk").rows(),
+                    S(eye="open").rows()]
+    look = []
+    for dx in (0, -1, -1, 0, 1, 1, 0):
+        cv = S(eye="open", ear="perk", cx=16 + dx)
+        look.append(cv.rows())
+    f["look"] = look
     w = []
     for i, (paw, bob, ear) in enumerate([("left", 0, "normal"), ("down", -1, "flap"),
                                          ("right", 0, "normal"), ("down", -1, "flap")]):
-        cv = sitting(eyes="open", mouth="tongue", ear=ear, paw=paw, bob=bob,
-                     tail_a=0.3 if i % 2 else 0.8)
-        add_lines(cv, i % 2)
+        cv = S(eye="open", mouth="tongue", ear=ear, paw=paw, bob=bob,
+               tail_a=(0.3 if i % 2 else 0.8) if kind != "cat" else (0.6 if i % 2 else -0.6))
+        speed_lines(cv, i % 2)
         w.append(cv.rows())
     f["working"] = w
-    f["waiting"] = [
-        sitting(eyes="open", mouth="open", ear="perk", paw="raised", tail_a=0.4).rows(),
-        sitting(dy=-1, eyes="open", mouth="smile", ear="perk", paw="raised", tail_a=0.9).rows(),
-    ]
+    f["waiting"] = [S(eye="open", mouth="open", ear="perk", paw="raised", tail_a=0.4).rows(),
+                    S(dy=-1, eye="open", mouth="smile", ear="perk", paw="raised", tail_a=0.9).rows()]
     d = []
-    for a in (0.2, 0.8, 1.2, 0.8):
-        cv = sitting(eyes="happy", mouth="tongue", tail_a=a, blush=True)
+    for i, a in enumerate((0.2, 0.8, 1.2, 0.8) if kind != "cat" else (-0.8, 0, 0.8, 0)):
+        cv = S(eye="happy", mouth="tongue", tail_a=a, blush=True)
+        sparkles(cv, i)
         d.append(cv.rows())
-    add_sparkle_rows(d)
     f["done"] = d
     fl = []
     for i in range(2):
-        cv = sitting(dy=i, eyes="sad", mouth="frown", ear="flat", tail_a=1.6)
-        add_sweat(cv, 24, 6 + i)
+        cv = S(dy=i, eye="sad", mouth="frown", ear="flat", tail_a=1.6 if kind != "cat" else 1.2)
+        sweat(cv, 25, 5 + i)
         fl.append(cv.rows())
     f["failed"] = fl
     return f
 
 
-def add_sparkle_rows(frame_rows):
-    for i, rows in enumerate(frame_rows):
-        g = [list(r) for r in rows]
-        pts = [(4, 6), (27, 4)] if i % 2 == 0 else [(5, 3), (28, 8)]
-        for x, y in pts:
-            for (dx, dy) in [(0, -1), (-1, 0), (0, 0), (1, 0), (0, 1)]:
-                if g[y + dy][x + dx] == ".":
-                    g[y + dy][x + dx] = "y"
-        frame_rows[i] = ["".join(r) for r in g]
+# ---------- robot ----------
+
+def robot(eye="open", light="g", arms="down", dy=0, look=0, screen_extra=None, slump=0):
+    cv = Canvas()
+    hy = 5 + dy + slump
+    # antenna
+    cv.px([(16, hy - 1), (16, hy - 2)], "g")
+    cv.rect(15, hy - 4, 17, hy - 3, light, round_corners=False)
+    # treads
+    cv.rect(8, 28 + dy, 13, 30 + dy, "n", round_corners=True)
+    cv.rect(18, 28 + dy, 23, 30 + dy, "n", round_corners=True)
+    # body
+    cv.rect(9, 19 + dy, 22, 28 + dy, "s", round_corners=True)
+    cv.rect(12, 21 + dy, 19, 25 + dy, "g")
+    cv.px([(14, 23 + dy), (15, 23 + dy), (16, 23 + dy), (17, 23 + dy)], light if light != "g" else "n")
+    # arms
+    if arms == "down":
+        cv.rect(5, 20 + dy, 7, 26 + dy, "g", round_corners=True)
+        cv.rect(24, 20 + dy, 26, 26 + dy, "g", round_corners=True)
+    elif arms == "wave":
+        cv.rect(5, 20 + dy, 7, 26 + dy, "g", round_corners=True)
+        cv.rect(24, 12 + dy, 26, 19 + dy, "g", round_corners=True)
+    elif arms == "up":
+        cv.rect(5, 12 + dy, 7, 19 + dy, "g", round_corners=True)
+        cv.rect(24, 12 + dy, 26, 19 + dy, "g", round_corners=True)
+    elif arms == "left":
+        cv.rect(5, 18 + dy, 7, 24 + dy, "g", round_corners=True)
+        cv.rect(24, 21 + dy, 26, 27 + dy, "g", round_corners=True)
+    elif arms == "right":
+        cv.rect(5, 21 + dy, 7, 27 + dy, "g", round_corners=True)
+        cv.rect(24, 18 + dy, 26, 24 + dy, "g", round_corners=True)
+    # neck + head
+    cv.rect(14, 17 + dy, 17, 18 + dy, "g", outline=False)
+    cv.rect(7, hy, 24, hy + 12, "s", round_corners=True)
+    cv.px([(6, hy + 5), (6, hy + 6), (6, hy + 7), (25, hy + 5), (25, hy + 6), (25, hy + 7)], "g")  # ear bolts
+    cv.rect(9, hy + 2, 22, hy + 10, "n", outline=False)
+    # face on the screen
+    ey = hy + 4
+    for side in (-1, 1):
+        ex = 15.5 + side * 3.5 + look
+        x0 = int(round(ex - 1))
+        if eye == "open":
+            cv.px([(x0, ey), (x0 + 1, ey), (x0, ey + 1), (x0 + 1, ey + 1), (x0, ey + 2), (x0 + 1, ey + 2)], "e")
+            cv.set(x0, ey, "w")
+        elif eye == "closed":
+            cv.px([(x0 - 1, ey + 2), (x0, ey + 2), (x0 + 1, ey + 2), (x0 + 2, ey + 2)], "e")
+        elif eye == "happy":
+            cv.px([(x0 - 1, ey + 2), (x0, ey + 1), (x0 + 1, ey + 1), (x0 + 2, ey + 2)], "e")
+        elif eye == "x":
+            cv.px([(x0 - 1, ey), (x0 + 2, ey), (x0, ey + 1), (x0 + 1, ey + 1), (x0 - 1, ey + 2), (x0 + 2, ey + 2)], "R")
+        elif eye == "wide":
+            cv.px([(x0 - 1, ey - 1), (x0, ey - 1), (x0 + 1, ey - 1), (x0 + 2, ey - 1),
+                   (x0 - 1, ey), (x0 + 2, ey), (x0 - 1, ey + 1), (x0 + 2, ey + 1),
+                   (x0 - 1, ey + 2), (x0, ey + 2), (x0 + 1, ey + 2), (x0 + 2, ey + 2)], "e")
+            cv.px([(x0, ey), (x0 + 1, ey + 1)], "w")
+    if screen_extra == "smile":
+        cv.px([(14, hy + 8), (15, hy + 9), (16, hy + 9), (17, hy + 8)], "e")
+    elif screen_extra == "flat":
+        cv.px([(14, hy + 9), (15, hy + 9), (16, hy + 9), (17, hy + 9)], "e")
+    elif screen_extra == "o":
+        cv.px([(15, hy + 8), (16, hy + 8), (15, hy + 9), (16, hy + 9)], "e")
+    elif screen_extra == "frown":
+        cv.px([(14, hy + 9), (15, hy + 8), (16, hy + 8), (17, hy + 9)], "R")
+    elif isinstance(screen_extra, int):  # loading dots
+        for i in range(3):
+            cv.set(13 + i * 3, hy + 9, "e" if i == screen_extra else "g")
+    return cv
+
+
+def robot_frames():
+    f = {}
+    idle = []
+    for i in range(3):
+        cv = robot(eye="closed", light="g", screen_extra="flat", slump=1)
+        zs(cv, i, spots=((22, 9), (25, 5), (28, 1)))
+        idle.append(cv.rows())
+    f["idle"] = idle
+    f["stretch"] = [robot(eye="closed", arms="up", screen_extra="o").rows(),
+                    robot(eye="open", arms="up", dy=-1, screen_extra="o").rows(),
+                    robot(eye="open", screen_extra="smile").rows()]
+    f["look"] = [robot(eye="open", look=dx, screen_extra="flat").rows() for dx in (0, -2, -2, 0, 2, 2, 0)]
+    w = []
+    for i, arms in enumerate(("left", "down", "right", "down")):
+        cv = robot(eye="open", light="y" if i % 2 == 0 else "g", arms=arms, dy=-(i % 2), screen_extra=i % 3)
+        speed_lines(cv, i % 2)
+        w.append(cv.rows())
+    f["working"] = w
+    f["waiting"] = [robot(eye="wide", light="a", arms="wave", screen_extra="o").rows(),
+                    robot(eye="wide", light="g", arms="wave", dy=-1, screen_extra="o").rows()]
+    d = []
+    for i in range(4):
+        cv = robot(eye="happy", light="G", arms="up" if i % 2 == 0 else "down", dy=-(i % 2 == 0),
+                   screen_extra="smile")
+        sparkles(cv, i)
+        d.append(cv.rows())
+    f["done"] = d
+    fl = []
+    for i in range(2):
+        cv = robot(eye="x", light="R" if i == 0 else "g", screen_extra="frown", slump=1)
+        cv.px([(25, 2 + i), (26, 1 + i), (27, 2 + i), (26, 3 + i), (28, 0 + i)], "z")  # smoke puff
+        fl.append(cv.rows())
+    f["failed"] = fl
+    return f
 
 
 # ---------- output ----------
 
-ORDER = ["idle", "stretch", "working", "waiting", "done", "failed"]
+ORDER = ["idle", "stretch", "look", "working", "waiting", "done", "failed"]
+
+CHARACTERS = [
+    # (id, display name, palette, frames builder)
+    ("pixel-dog", "Griffon (built-in)", GRIFFON, lambda: animal(griffon_head, "dog", belly=False)),
+    ("pixel-cat", "Cat (built-in)", CAT, lambda: animal(cat_head, "cat", belly=True)),
+    ("pixel-robot", "Robot (built-in)", ROBOT, robot_frames),
+    ("pixel-golden", "Golden Dog (built-in)", GOLDEN, lambda: animal(golden_head, "dog", belly=True)),
+]
 
 
-def write_swift(f):
-    out = []
-    out.append("// Generated by tools/gen_sprites.py — edit there, or tweak the grids below by hand.")
-    out.append("// One character per pixel. Legend:")
-    for k, v in PALETTE.items():
-        out.append(f"//   {k}  rgb{v}")
-    out.append("//   .  transparent")
-    out.append("")
-    out.append("enum DogSprites {")
-    out.append("    static let palette: [Character: (UInt8, UInt8, UInt8)] = [")
-    for k, (r, g, b) in PALETTE.items():
-        out.append(f'        "{k}": ({r}, {g}, {b}),')
-    out.append("    ]")
-    out.append("")
-    out.append("    static let frames: [String: [[String]]] = [")
-    for name in ORDER:
-        out.append(f'        "{name}": [')
-        for rows in f[name]:
-            out.append("            [")
-            for r in rows:
-                out.append(f'                "{r}",')
-            out.append("            ],")
-        out.append("        ],")
+def swift_string(s):
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def write_swift(built):
+    out = ["// Generated by tools/gen_sprites.py — edit there, or tweak the grids below by hand.",
+           "// One character per pixel; each pet has its own palette legend. '.' is transparent.",
+           "",
+           "struct PixelCharacter {",
+           "    let id: String",
+           "    let displayName: String",
+           "    let palette: [Character: (UInt8, UInt8, UInt8)]",
+           "    let frames: [String: [[String]]]",
+           "}",
+           "",
+           "enum PixelSprites {",
+           "    static let characters: [PixelCharacter] = [all[0], all[1], all[2], all[3]]",
+           "",
+           "    private static let all: [PixelCharacter] = ["]
+    for cid, name, pal, frames in built:
+        out.append("        PixelCharacter(")
+        out.append(f'            id: "{cid}",')
+        out.append(f'            displayName: "{swift_string(name)}",')
+        out.append("            palette: [")
+        for k, (r, g, b) in pal.items():
+            out.append(f'                "{k}": ({r}, {g}, {b}),')
+        out.append("            ],")
+        out.append("            frames: [")
+        for state in ORDER:
+            out.append(f'                "{state}": [')
+            for rows in frames[state]:
+                out.append("                    [")
+                for r in rows:
+                    out.append(f'                        "{r}",')
+                out.append("                    ],")
+            out.append("                ],")
+        out.append("            ]")
+        out.append("        ),")
     out.append("    ]")
     out.append("}")
-    path = os.path.join(ROOT, "Sources", "RaicodePet", "DogSprites.swift")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    path = os.path.join(ROOT, "Sources", "RaicodePet", "PixelSprites.swift")
     with open(path, "w") as fh:
         fh.write("\n".join(out) + "\n")
 
 
-def write_preview(f, scale=6):
+def write_preview(built, scale=5):
     from PIL import Image, ImageDraw
-    cols = max(len(v) for v in f.values())
-    pad = 8
-    label_w = 90
+    cols = max(len(v) for _, _, _, fr in built for v in fr.values())
+    pad, label_w = 6, 110
+    rows_total = len(built) * len(ORDER)
     img = Image.new("RGB", (label_w + cols * (W * scale + pad) + pad,
-                            len(ORDER) * (H * scale + pad) + pad), (236, 238, 242))
+                            rows_total * (H * scale + pad) + pad + len(built) * 20), (236, 238, 242))
     dr = ImageDraw.Draw(img)
-    for r, name in enumerate(ORDER):
-        y0 = pad + r * (H * scale + pad)
-        dr.text((8, y0 + H * scale // 2 - 6), name, fill=(40, 40, 40))
-        for c, rows in enumerate(f[name]):
-            x0 = label_w + c * (W * scale + pad)
-            dr.rectangle([x0, y0, x0 + W * scale - 1, y0 + H * scale - 1], fill=(255, 255, 255))
-            for y, row in enumerate(rows):
-                for x, ch in enumerate(row):
-                    if ch in PALETTE:
-                        dr.rectangle([x0 + x * scale, y0 + y * scale,
-                                      x0 + x * scale + scale - 1, y0 + y * scale + scale - 1],
-                                     fill=PALETTE[ch])
+    y0 = pad
+    for cid, name, pal, frames in built:
+        dr.text((8, y0), name, fill=(0, 0, 0))
+        y0 += 20
+        for state in ORDER:
+            dr.text((8, y0 + H * scale // 2 - 6), state, fill=(60, 60, 60))
+            for c, rows in enumerate(frames[state]):
+                x0 = label_w + c * (W * scale + pad)
+                dr.rectangle([x0, y0, x0 + W * scale - 1, y0 + H * scale - 1], fill=(255, 255, 255))
+                for y, row in enumerate(rows):
+                    for x, ch in enumerate(row):
+                        if ch in pal:
+                            dr.rectangle([x0 + x * scale, y0 + y * scale, x0 + x * scale + scale - 1,
+                                          y0 + y * scale + scale - 1], fill=pal[ch])
+            y0 += H * scale + pad
     img.save(os.path.join(ROOT, "tools", "preview.png"))
 
 
+def build():
+    return [(cid, name, pal, fn()) for cid, name, pal, fn in CHARACTERS]
+
+
 if __name__ == "__main__":
-    fr = frames()
-    write_swift(fr)
-    write_preview(fr)
-    print("ok:", {k: len(v) for k, v in fr.items()})
+    b = build()
+    for cid, _, pal, frames in b:
+        for state, fr in frames.items():
+            for rows in fr:
+                assert len(rows) == H and all(len(r) == W for r in rows), (cid, state)
+                missing = {ch for r in rows for ch in r} - set(pal) - {"."}
+                assert not missing, (cid, state, missing)
+    write_swift(b)
+    write_preview(b)
+    print("ok:", [(cid, {k: len(v) for k, v in fr.items()}) for cid, _, _, fr in b])

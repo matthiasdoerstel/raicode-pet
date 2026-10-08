@@ -30,18 +30,18 @@ def icon():
     off = (SIZE - inner) // 2
 
     bg = Image.new("RGBA", (inner, inner))
-    top, bottom = (255, 226, 170), (246, 170, 104)
+    top, bottom = (255, 226, 170), (246, 170, 104)  # warm backdrop so the black dog pops
     d = ImageDraw.Draw(bg)
     for y in range(inner):
         t = y / (inner - 1)
         d.line([(0, y), (inner, y)], fill=tuple(int(a + (b - a) * t) for a, b in zip(top, bottom)) + (255,))
 
-    rows = gs.sitting(eyes="happy", mouth="tongue", tail_a=0.8, blush=True).rows()
+    rows = gs.sitting(gs.griffon_head, eye="happy", mouth="tongue", tail_a=0.8, blush=True, belly=False).rows()
     dog = Image.new("RGBA", (gs.W, gs.H), (0, 0, 0, 0))
     for y, row in enumerate(rows):
         for x, ch in enumerate(row):
-            if ch in gs.PALETTE:
-                dog.putpixel((x, y), gs.PALETTE[ch] + (255,))
+            if ch in gs.GRIFFON:
+                dog.putpixel((x, y), gs.GRIFFON[ch] + (255,))
     scale = 19  # 32px * 19 = 608px
     dog = dog.resize((gs.W * scale, gs.H * scale), Image.NEAREST)
 
