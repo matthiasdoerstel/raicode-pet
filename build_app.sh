@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds RaicodePet.app (ad-hoc signed) and installs it to ~/Applications.
+# Builds RaicodePet.app (ad-hoc signed) and installs it to /Applications.
 # Usage: ./build_app.sh            build + install
 #        ./build_app.sh --no-install
 set -euo pipefail
@@ -35,9 +35,9 @@ PLIST
 codesign --force --sign - "$APP" >/dev/null
 
 if [[ "${1:-}" != "--no-install" ]]; then
-  mkdir -p ~/Applications
+  mkdir -p /Applications
   pkill -x RaicodePet 2>/dev/null || true
-  rm -rf ~/Applications/RaicodePet.app
-  cp -R "$APP" ~/Applications/
-  echo "Installed ~/Applications/RaicodePet.app"
+  rm -rf /Applications/RaicodePet.app
+  cp -R "$APP" /Applications/
+  echo "Installed /Applications/RaicodePet.app"
 fi
