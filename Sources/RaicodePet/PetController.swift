@@ -69,7 +69,7 @@ final class PetController: ObservableObject {
         if advance { frameIndex += 1 }
 
         if frameIndex >= frames.count {
-            if oneShot != nil || animation == .stretch {
+            if oneShot != nil || animation == .stretch || animation == .lookAround {
                 oneShot = nil
                 animation = loopAnimation()
                 frames = art.frames(animation)
@@ -80,8 +80,9 @@ final class PetController: ObservableObject {
         // Now and then, an idle pet stretches or looks around.
         if animation == .idle, frameIndex == 0, Date() > nextIdleVariety, !reduceMotion {
             nextIdleVariety = Date().addingTimeInterval(.random(in: 20...45))
-            animation = .stretch
-            frames = art.frames(.stretch)
+            // Pick the variation once, so the whole sequence plays from one row.
+            animation = Bool.random() ? .stretch : .lookAround
+            frames = art.frames(animation)
         }
 
         guard !frames.isEmpty else { frame = nil; return }

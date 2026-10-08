@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 
 enum PetAnimation: String, CaseIterable {
-    case idle, stretch, working, waiting, done, failed
+    case idle, stretch, lookAround, working, waiting, done, failed
     /// One-shots played on top of the state loop.
     case celebrate, wave
 }
@@ -35,6 +35,7 @@ final class PixelDogArt: PetArt {
         switch animation {
         case .celebrate: key = "done"
         case .wave: key = "waiting"
+        case .lookAround: key = "stretch"
         default: key = animation.rawValue
         }
         if let cached = cache[key] { return cached }
@@ -46,7 +47,7 @@ final class PixelDogArt: PetArt {
     func frameDuration(_ animation: PetAnimation) -> TimeInterval {
         switch animation {
         case .idle: return 1.1
-        case .stretch: return 0.7
+        case .stretch, .lookAround: return 0.7
         case .working: return 0.16
         case .waiting, .wave: return 0.35
         case .done, .celebrate: return 0.18
@@ -115,7 +116,8 @@ final class CodexPetArt: PetArt {
         let candidates: [String]
         switch animation {
         case .idle: candidates = ["idle"]
-        case .stretch: candidates = [Bool.random() ? "stretching" : "looking-around", "stretching", "looking-around"]
+        case .stretch: candidates = ["stretching", "looking-around"]
+        case .lookAround: candidates = ["looking-around", "stretching"]
         case .working: candidates = ["running", "running-right"]
         case .waiting: candidates = ["waiting"]
         case .done: candidates = ["review"]
@@ -131,7 +133,7 @@ final class CodexPetArt: PetArt {
 
     func frameDuration(_ animation: PetAnimation) -> TimeInterval {
         switch animation {
-        case .idle, .stretch: return 0.16
+        case .idle, .stretch, .lookAround: return 0.16
         case .failed: return 0.18
         default: return 0.11
         }
