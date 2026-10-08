@@ -45,7 +45,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleIdentifier</key><string>com.matthias.raicode-pet</string>
+  <key>CFBundleIdentifier</key><string>com.matthias.raicodepet</string>
   <key>CFBundleName</key><string>Raicode Pet</string>
   <key>CFBundleDisplayName</key><string>Raicode Pet</string>
   <key>CFBundleExecutable</key><string>RaicodePet</string>
