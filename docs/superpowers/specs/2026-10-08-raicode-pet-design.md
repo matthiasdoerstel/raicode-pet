@@ -97,6 +97,16 @@ Raicode hook fires ─▶ RaicodePet hook <event>  ─▶  ~/.raicode-pet/sessio
 - On entering **waiting** or **done**, a native macOS notification fires (once per transition) and a short system sound plays; both toggleable in the menu.
 - Reduce Motion on → a single still frame per state.
 
+### Codex pet support (added after review)
+
+If a Codex-format pet is installed, it replaces the built-in pixel dog. Default: **Jin Mao** (personal use only, never redistributed).
+
+- Location: `~/.raicode-pet/pets/<name>/` with `pet.json` (`id`, `displayName`, `spritesheetPath`) + spritesheet (PNG/WebP). Also picks up `~/.codex/pets/`.
+- Atlas: 8 columns × N rows of 192×208 cells. Row order: `idle, running-right, running-left, waving, jumping, failed, waiting, running, review`, optional `stretching, looking-around`. Frame count per row = cells until the first fully transparent one.
+- State → row: idle→`idle` (with occasional `stretching`/`looking-around`), working→`running`, waiting→`waiting`, done→`review` (plays `jumping` once on entering), failed→`failed`. Clicking/waking plays `waving` once.
+- Rendered at native 192×208 cell size scaled to ~0.75× (≈144×156 pt), smooth scaling.
+- Menu: *Pet* submenu lists installed pets + built-in pixel dog; choice persisted.
+
 ## Interaction
 
 - **Click dog:** one session → focus its terminal and clear done/failed. Several sessions → small popover list sorted by priority; clicking a row focuses that terminal.
@@ -138,4 +148,4 @@ Raicode hook fires ─▶ RaicodePet hook <event>  ─▶  ~/.raicode-pet/sessio
 
 ## Out of scope (for now)
 
-Cost/usage tracking, streaks/XP, custom pet packs / Codex spritesheet import, one dog per session, tab-level terminal focus, Windows/Linux, distribution/notarization.
+Cost/usage tracking, streaks/XP, a pet gallery / per-project pets, one dog per session, tab-level terminal focus, Windows/Linux, distribution/notarization.
