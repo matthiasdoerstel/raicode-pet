@@ -14,6 +14,9 @@ final class PetController: ObservableObject {
     private var frameIndex = 0
     private var timer: Timer?
     private var nextIdleVariety = Date().addingTimeInterval(25)
+    /// How long the pet stays happy after a task; then it dozes off while "Done!" stays up.
+    private let happyDuration: TimeInterval = 15
+    private var doneSince: Date?
 
     init(art: PetArt) {
         self.art = art
@@ -29,6 +32,7 @@ final class PetController: ObservableObject {
         guard state != petState else { return }
         let previous = petState
         petState = state
+        doneSince = state == .done ? Date() : nil
         if state == .done && previous != .done {
             play(.celebrate)
         } else {
@@ -52,7 +56,9 @@ final class PetController: ObservableObject {
         case .idle: return .idle
         case .working: return .working
         case .waiting: return .waiting
-        case .done: return .done
+        case .done:
+            if let since = doneSince, Date().timeIntervalSince(since) > happyDuration { return .idle }
+            return .done
         case .failed: return .failed
         }
     }
@@ -69,7 +75,7 @@ final class PetController: ObservableObject {
         if advance { frameIndex += 1 }
 
         if frameIndex >= frames.count {
-            if oneShot != nil || animation == .stretch || animation == .lookAround {
+            if oneShot != nil || animation == .stretch || animation == .lookAround || animation == .done {
                 oneShot = nil
                 animation = loopAnimation()
                 frames = art.frames(animation)

@@ -35,7 +35,7 @@ Then, from the paw in the menu bar:
 | Done | Task finished | Only for tasks of 5+ minutes |
 | Failed | Task stopped with an error | — |
 
-With several sessions, the most urgent state wins (waiting › failed › done › working › idle). Done and failed stay until you click the pet or start a new prompt.
+With several sessions, the most urgent state wins (waiting › failed › done › working › idle). Done and failed stay until you click the pet or start a new prompt. After 15 seconds of celebrating, the pet dozes off again while "Done!" stays up.
 
 ## Menu bar
 
