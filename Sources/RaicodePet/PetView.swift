@@ -6,7 +6,7 @@ struct PetView: View {
     @ObservedObject var store: SessionStore
 
     static let bubbleHeight: CGFloat = 64
-    static let width: CGFloat = 240
+    static let width: CGFloat = 200
 
     var body: some View {
         VStack(spacing: 2) {

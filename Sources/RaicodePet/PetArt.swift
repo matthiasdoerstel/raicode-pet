@@ -25,7 +25,7 @@ protocol PetArt {
 final class PixelDogArt: PetArt {
     let id = "pixel-dog"
     let displayName = "Pixel Dog (built-in)"
-    let displaySize = CGSize(width: 160, height: 160)
+    let displaySize = CGSize(width: 128, height: 128)  // 32px × 4, keeps pixels crisp
     let smoothScaling = false
 
     private var cache: [String: [CGImage]] = [:]
