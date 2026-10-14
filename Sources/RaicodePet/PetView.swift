@@ -83,52 +83,23 @@ struct SpeechBubble: View {
     let message: String
     let tint: Color
 
-    static let tailHeight: CGFloat = 7
-    static let cornerRadius: CGFloat = 10
-
-    // Glass tuning (macOS 26+, AppKit window-level glass).
-    /// .clear (least frost) or .regular.
-    @available(macOS 26.0, *) static var glassStyle: NSGlassEffectView.Style { .clear }
-    /// How strongly the glass is tinted toward the state colour.
-    static let tintAlpha: Double = 0.3
-
     var body: some View {
-        Group {
-            if #available(macOS 26.0, *) {
-                // No tail: window glass only does rounded rects.
-                label(titleStyle: .white.opacity(0.9), messageStyle: .white)
-                    .shadow(color: .black.opacity(0.5), radius: 1.5, y: 0.5)
-                    .background(glass(cornerRadius: Self.cornerRadius))
-            } else {
-                label(titleStyle: .secondary, messageStyle: tint)
-                    .padding(.bottom, Self.tailHeight)
-                    .background(
-                        BubbleShape()
-                            .fill(Color.white)
-                            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
-                    )
-                    .overlay(BubbleShape().stroke(Color.black.opacity(0.12), lineWidth: 1))
-                    .environment(\.colorScheme, .light)
-            }
-        }
-        // Width cap goes outside the bubble, so the bubble hugs short messages.
-        .frame(maxWidth: PetView.width - 16)
+        // Built like the menu bar dropdown: an NSGlassEffectView that *contains* the text.
+        // (SwiftUI's .glassEffect rendered as a flat frosted fill here, losing the tint and the rim.)
+        GlassContainer(cornerRadius: 12, tint: NSColor(tint)) { label }
+            .fixedSize()
+            // Width cap goes outside the bubble, so the bubble hugs short messages.
+            .frame(maxWidth: PetView.width - 16)
     }
 
-    @available(macOS 26.0, *)
-    private func glass(cornerRadius: CGFloat) -> some View {
-        WindowGlass(style: Self.glassStyle, cornerRadius: cornerRadius,
-                    tint: NSColor(tint).withAlphaComponent(Self.tintAlpha))
-    }
-
-    private func label(titleStyle: some ShapeStyle, messageStyle: some ShapeStyle) -> some View {
+    private var label: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(title)
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(titleStyle)
+                .foregroundStyle(.white.opacity(0.85))
             Text(message)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(messageStyle)
+                .foregroundStyle(.white)
         }
         .lineLimit(1)
         .truncationMode(.middle)
@@ -137,40 +108,26 @@ struct SpeechBubble: View {
     }
 }
 
-/// AppKit's window-level Liquid Glass, which refracts what's behind the window
-/// (unlike SwiftUI's glassEffect, which only has our transparent window to work with).
-@available(macOS 26.0, *)
-struct WindowGlass: NSViewRepresentable {
-    var style: NSGlassEffectView.Style
+/// Hosts SwiftUI content *inside* an NSGlassEffectView, the way AppKit expects glass to be used.
+struct GlassContainer<Content: View>: NSViewRepresentable {
     var cornerRadius: CGFloat
     var tint: NSColor?
+    @ViewBuilder var content: Content
 
     func makeNSView(context: Context) -> NSGlassEffectView {
-        let view = NSGlassEffectView()
-        updateNSView(view, context: context)
-        return view
+        let glass = NSGlassEffectView()
+        glass.contentView = NSHostingView(rootView: content)
+        updateNSView(glass, context: context)
+        return glass
     }
 
-    func updateNSView(_ view: NSGlassEffectView, context: Context) {
-        view.style = style
-        view.cornerRadius = cornerRadius
-        view.tintColor = tint
+    func updateNSView(_ glass: NSGlassEffectView, context: Context) {
+        glass.cornerRadius = cornerRadius
+        glass.tintColor = tint
+        (glass.contentView as? NSHostingView<Content>)?.rootView = content
     }
-}
 
-/// Rounded bubble with a tail centred at the bottom, as one shape so glass flows into the tail.
-struct BubbleShape: Shape {
-    var cornerRadius: CGFloat = 10
-    var tailWidth: CGFloat = 12
-    var tailHeight: CGFloat = SpeechBubble.tailHeight
-
-    func path(in rect: CGRect) -> Path {
-        let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - tailHeight)
-        var tail = Path()
-        tail.move(to: CGPoint(x: body.midX - tailWidth / 2, y: body.maxY - 1))
-        tail.addLine(to: CGPoint(x: body.midX + tailWidth / 2, y: body.maxY - 1))
-        tail.addLine(to: CGPoint(x: body.midX, y: rect.maxY))
-        tail.closeSubpath()
-        return Path(roundedRect: body, cornerRadius: cornerRadius, style: .continuous).union(tail)
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSGlassEffectView, context: Context) -> CGSize? {
+        (nsView.contentView as? NSHostingView<Content>)?.fittingSize
     }
 }

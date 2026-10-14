@@ -291,3 +291,29 @@ final class ElapsedTextTests: XCTestCase {
         XCTAssertNil(r.elapsedText(now: t0.addingTimeInterval(3600)))
     }
 }
+
+final class StatusPillTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func session(_ state: PetState, started: TimeInterval = -180, since: TimeInterval = -240) -> SessionRecord {
+        SessionRecord(sessionId: "s", cwd: "/p", project: "p", state: state, updatedAt: t0,
+                      taskStartedAt: t0.addingTimeInterval(started), stateSince: t0.addingTimeInterval(since))
+    }
+
+    func testIdleIsJustThePaw() {
+        XCTAssertEqual(StatusPill.content(for: nil, now: t0), StatusPill.Content(symbol: "pawprint.fill", text: nil))
+        XCTAssertNil(StatusPill.content(for: session(.idle), now: t0).text)
+    }
+
+    func testEachStateShowsSymbolAndText() {
+        XCTAssertEqual(StatusPill.content(for: session(.working), now: t0).text, "working · 3 min")
+        XCTAssertEqual(StatusPill.content(for: session(.waiting), now: t0).text, "needs you · 4 min")
+        XCTAssertEqual(StatusPill.content(for: session(.done), now: t0).text, "done · 3 min")
+        XCTAssertEqual(StatusPill.content(for: session(.failed), now: t0).text, "failed")
+        XCTAssertEqual(StatusPill.content(for: session(.waiting), now: t0).symbol, "hand.raised.fill")
+    }
+
+    func testShortTimesDropTheSuffix() {
+        XCTAssertEqual(StatusPill.content(for: session(.working, started: -20), now: t0).text, "working")
+    }
+}

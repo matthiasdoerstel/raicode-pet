@@ -6,20 +6,49 @@ import SwiftUI
 import UserNotifications
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotificationCenterDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, ObservableObject,
+                         UNUserNotificationCenterDelegate {
     let store = SessionStore()
-    var pets: [PetArt] = []
-    var controller: PetController!
+    // Created up front: the MenuBarExtra scene reads these before launch finishes.
+    @Published private(set) var pets: [PetArt]
+    let controller: PetController
     var panel: PetPanel!
     var statusItem: NSStatusItem!
     var cancellables: Set<AnyCancellable> = []
+    private var clock: Timer?
+    /// Sits over the button's icon so the symbol can animate; NSStatusBarButton can't animate symbols itself.
+    private let symbolView = NSImageView()
+    private var animatedState: PetState?
+    private let classicMenu = NSMenu()
+    private let dropdown = GlassDropdown()
+
+    /// Quiet mode hides the pet and shows a compact status in the menu bar instead.
+    private static let quietKey = "quietMode"
+    @Published private(set) var quietMode = UserDefaults.standard.bool(forKey: AppDelegate.quietKey) {
+        didSet { UserDefaults.standard.set(quietMode, forKey: Self.quietKey) }
+    }
+    /// Ticks every 30 s so timers in the menu bar and panel keep counting.
+    @Published private(set) var now = Date()
+
+    override init() {
+        let pets = PetLibrary.available()
+        self.pets = pets
+        controller = PetController(art: PetLibrary.selected(from: pets))
+        super.init()
+    }
+
+    var launchAtLogin: Bool { SMAppService.mainApp.status == .enabled }
+    var hooksInstalled: Bool { HookSetup.isInstalled }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        pets = PetLibrary.available()
-        controller = PetController(art: PetLibrary.selected(from: pets))
-
         buildPanel()
         buildStatusItem()
+        clock = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.now = Date()
+                self?.updateStatusItem()
+            }
+        }
 
         store.onTransition = { session, _ in
             if NotificationPolicy.shouldAnnounce(session) {
@@ -61,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         panel.setContentSize(view.fittingSize)
         PetPlacement.restore(panel)
         controller.window = panel
-        panel.orderFrontRegardless()
+        if !quietMode { panel.orderFrontRegardless() }
     }
 
     private func petClicked(_ event: NSEvent) {
@@ -91,7 +120,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     @objc private func sessionChosen(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
               let s = store.sessions.first(where: { $0.sessionId == id }) else { return }
-        store.acknowledge(id)
+        select(s)
+    }
+
+    /// Jumps to a session's terminal and acknowledges it.
+    func select(_ s: SessionRecord) {
+        dropdown.close()
+        store.acknowledge(s.sessionId)
         TerminalFocuser.focus(s)
     }
 
@@ -99,13 +134,95 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     private func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        // A plain template icon: macOS draws it black or white to suit the menu bar and wallpaper.
-        let icon = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Raicode Pet")
+        classicMenu.delegate = self
+        // Left-click opens the glass dropdown, right-click the classic menu.
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(statusItemClicked)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        updateStatusItem()
+
+        // @Published fires before the value lands; hop to the next run loop turn to read it.
+        store.$sessions.combineLatest(store.$state)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+    }
+
+    /// Template images and plain text, so macOS draws it black or white to suit the menu bar and wallpaper.
+    private func updateStatusItem() {
+        guard let button = statusItem.button else { return }
+        let focus = store.sessions.first { $0.state == store.state }
+        let content = quietMode
+            ? StatusPill.content(for: focus, now: Date())
+            : StatusPill.Content(symbol: "pawprint.fill", text: nil)
+
+        let icon = NSImage(systemSymbolName: content.symbol, accessibilityDescription: content.text ?? "Raicode Pet")
         icon?.isTemplate = true
-        statusItem.button?.image = icon
-        let menu = NSMenu()
-        menu.delegate = self
-        statusItem.menu = menu
+        button.image = icon
+        let animate = quietMode && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if let text = content.text {
+            statusItem.length = NSStatusItem.variableLength
+            button.title = " " + text
+            button.imagePosition = .imageLeading
+        } else {
+            statusItem.length = NSStatusItem.squareLength
+            button.title = ""
+            button.imagePosition = .imageOnly
+        }
+        updateSymbolEffect(animate ? store.state : nil, icon: icon, in: button)
+    }
+
+    /// Animates the menu bar symbol per state: working spins, needs-you wiggles now and then,
+    /// done bounces once. Other states (or nil) show the plain button image.
+    private func updateSymbolEffect(_ state: PetState?, icon: NSImage?, in button: NSStatusBarButton) {
+        guard #available(macOS 15.0, *), let icon, let state, [.working, .waiting, .done].contains(state) else {
+            symbolView.removeFromSuperview()
+            symbolView.removeAllSymbolEffects()
+            animatedState = nil
+            return
+        }
+        // A blank placeholder keeps the button's layout; the overlay draws the real symbol on top.
+        let placeholder = NSImage(size: icon.size)
+        placeholder.isTemplate = true
+        button.image = placeholder
+        if symbolView.superview !== button {
+            symbolView.imageScaling = .scaleNone
+            button.addSubview(symbolView)
+        }
+        if animatedState != state {
+            animatedState = state
+            symbolView.image = icon
+            symbolView.removeAllSymbolEffects()
+            switch state {
+            case .working: symbolView.addSymbolEffect(.rotate, options: .repeat(.continuous))
+            case .waiting: symbolView.addSymbolEffect(.wiggle, options: .repeat(.periodic(delay: 4)))
+            default: symbolView.addSymbolEffect(.bounce, options: .nonRepeating)
+            }
+        }
+        // Position once the variable-length item has resized.
+        DispatchQueue.main.async { [symbolView] in
+            guard let cell = button.cell else { return }
+            symbolView.frame = cell.imageRect(forBounds: button.bounds)
+        }
+    }
+
+    @objc private func statusItemClicked() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            dropdown.close()
+            showClassicMenu()
+        } else if dropdown.isShown {
+            dropdown.close()
+        } else if let button = statusItem.button {
+            dropdown.show(StatusPanel(app: self, pet: controller, store: store), below: button)
+        }
+    }
+
+    private func showClassicMenu() {
+        // Attach the menu just for this click, so left-clicks keep opening the dropdown.
+        statusItem.menu = classicMenu
+        statusItem.button?.performClick(nil)
+        statusItem.menu = nil
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -115,6 +232,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             menu.addItem(item)
         }
     }
+
+    // MARK: - Pet context menu
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
@@ -167,6 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         petItem.submenu = petMenu
         menu.addItem(petItem)
 
+        add("Quiet Mode", #selector(toggleQuietMode), key: "d", state: quietMode)
         add("Notifications", #selector(toggleNotifications), state: Notifier.notificationsEnabled)
         add("Sounds", #selector(toggleSounds), state: Notifier.soundsEnabled)
         add("Launch at Login", #selector(toggleLogin), state: SMAppService.mainApp.status == .enabled)
@@ -178,17 +298,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     }
 
     @objc private func togglePet() {
+        if quietMode { return toggleQuietMode() }  // showing the pet ends quiet mode
         if panel.isVisible { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
     }
 
+    @objc func toggleQuietMode() {
+        quietMode.toggle()
+        if quietMode { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+        updateStatusItem()
+    }
+
     @objc private func choosePet(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String, let pet = pets.first(where: { $0.id == id }) else { return }
+        guard let id = sender.representedObject as? String else { return }
+        choosePet(id: id)
+    }
+
+    func choosePet(id: String) {
+        guard let pet = pets.first(where: { $0.id == id }) else { return }
         UserDefaults.standard.set(id, forKey: PetLibrary.selectionKey)
         controller.setArt(pet)
         resizePanel()
     }
 
-    @objc private func renamePet() {
+    @objc func renamePet() {
         let art = controller.art
         let names = PetNames()
 
@@ -213,6 +345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         default: return
         }
         controller.setArt(art)  // republishes, so the bubble picks up the new name
+        objectWillChange.send()  // and the panel's pet list
     }
 
     @objc private func openPetsFolder() {
@@ -239,7 +372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     @objc private func toggleNotifications() { Notifier.notificationsEnabled.toggle() }
     @objc private func toggleSounds() { Notifier.soundsEnabled.toggle() }
 
-    @objc private func toggleLogin() {
+    @objc func toggleLogin() {
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
@@ -249,9 +382,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         } catch {
             alert("Couldn't change Launch at Login", error.localizedDescription)
         }
+        objectWillChange.send()
     }
 
-    @objc private func toggleHooks() {
+    @objc func toggleHooks() {
         do {
             if HookSetup.isInstalled {
                 try HookSetup.remove()
@@ -263,6 +397,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             alert("Couldn't update ~/.claude/settings.json",
                   "The file couldn't be read as JSON, so nothing was changed.\n\n\(error)")
         }
+        objectWillChange.send()
     }
 
     private func offerHookInstall() {
@@ -275,7 +410,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         if a.runModal() == .alertFirstButtonReturn { toggleHooks() }
     }
 
-    @objc private func quit() { NSApp.terminate(nil) }
+    @objc func quit() { NSApp.terminate(nil) }
 
     private func alert(_ title: String, _ text: String) {
         let a = NSAlert()
