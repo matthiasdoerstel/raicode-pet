@@ -8,6 +8,8 @@ final class PetController: ObservableObject {
     @Published private(set) var art: PetArt
     @Published private(set) var frame: CGImage?
     @Published private(set) var petState: PetState = .idle
+    /// Bumped on every pet; the view floats a burst of hearts each time it changes.
+    @Published private(set) var petCount = 0
 
     private var animation: PetAnimation = .idle
     private var oneShot: PetAnimation?
@@ -59,6 +61,12 @@ final class PetController: ObservableObject {
             oneShot = nil
             restart()
         }
+    }
+
+    /// Someone stroked the pet: hearts, plus a hop unless motion is reduced. Doesn't touch session state.
+    func pet() {
+        petCount += 1
+        if !reduceMotion && walk == nil { play(.celebrate) }
     }
 
     /// Plays an animation once, then returns to the state loop.

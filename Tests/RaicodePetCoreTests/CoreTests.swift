@@ -361,3 +361,52 @@ final class StatusPillTests: XCTestCase {
         XCTAssertEqual(StatusPill.content(for: session(.working, started: -20), now: t0).text, "working")
     }
 }
+
+final class StrokeDetectorTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    /// Feeds a back-and-forth stroke of `amplitude` points, `strokes` direction changes, `step` seconds apart.
+    @discardableResult
+    func stroke(_ d: inout StrokeDetector, strokes: Int, amplitude: Double = 30, step: TimeInterval = 0.15,
+                start: TimeInterval = 0) -> [Bool] {
+        var results: [Bool] = []
+        for i in 0...strokes {
+            let x = i.isMultiple(of: 2) ? 0 : amplitude
+            results.append(d.add(x: x, at: t0.addingTimeInterval(start + Double(i) * step)))
+        }
+        return results
+    }
+
+    func testFourStrokesPet() {
+        var d = StrokeDetector()
+        let results = stroke(&d, strokes: 5)
+        XCTAssertEqual(results.filter { $0 }.count, 1, "triggers once")
+        XCTAssertTrue(results.last! || results.dropLast().last!, "on the 4th reversal")
+    }
+
+    func testSinglePassAndSmallWiggleDoNotPet() {
+        var d = StrokeDetector()
+        XCTAssertFalse(stroke(&d, strokes: 1).contains(true))
+        var wiggle = StrokeDetector()
+        XCTAssertFalse(stroke(&wiggle, strokes: 10, amplitude: 5).contains(true))
+    }
+
+    func testSlowStrokesDoNotPet() {
+        var d = StrokeDetector()
+        XCTAssertFalse(stroke(&d, strokes: 6, step: 0.8).contains(true))
+    }
+
+    func testCooldownThenPetsAgain() {
+        var d = StrokeDetector()
+        XCTAssertTrue(stroke(&d, strokes: 5).contains(true))
+        XCTAssertFalse(stroke(&d, strokes: 5, start: 1).contains(true), "still cooling down")
+        XCTAssertTrue(stroke(&d, strokes: 5, start: 5).contains(true))
+    }
+
+    func testResetForgetsStrokes() {
+        var d = StrokeDetector()
+        stroke(&d, strokes: 3)
+        d.reset()
+        XCTAssertFalse(stroke(&d, strokes: 2, start: 0.6).contains(true))
+    }
+}

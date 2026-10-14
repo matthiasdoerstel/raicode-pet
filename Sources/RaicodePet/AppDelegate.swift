@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Observ
     var panel: PetPanel!
     private var bubble: BubbleWindow?
     private var bubbleSpec: BubbleSpec?
+    private var strokes = StrokeDetector()
     var statusItem: NSStatusItem!
     var cancellables: Set<AnyCancellable> = []
     private var clock: Timer?
@@ -86,6 +87,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Observ
             NSMenu.popUpContextMenu(self.makeMenu(), with: event, for: view)
         }
         view.onDrag = { [weak self] dx in self?.controller.dragged(dx: dx) }
+        view.onHover = { [weak self, weak view] point in
+            guard let self, let view else { return }
+            self.pointerMoved(to: point, in: view)
+        }
+        view.onHoverEnded = { [weak self] in self?.strokes.reset() }
         view.onMoved = { [weak self] in
             guard let self else { return }
             self.controller.dragEnded()
@@ -98,6 +104,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Observ
         bubble = BubbleWindow(parent: panel, eventTarget: view)
         if !quietMode { panel.orderFrontRegardless() }
         bubble?.update(bubbleSpec)
+    }
+
+    /// Strokes over the sprite (not the empty bubble strip above it) count towards petting.
+    private func pointerMoved(to point: NSPoint, in view: NSView) {
+        let size = controller.art.displaySize
+        let spriteTop = view.isFlipped ? view.bounds.height - size.height : size.height
+        let overSprite = abs(point.x - view.bounds.midX) <= size.width / 2
+            && (view.isFlipped ? point.y >= spriteTop : point.y <= spriteTop)
+        guard overSprite else { return strokes.reset() }
+        if strokes.add(x: point.x, at: Date()) { controller.pet() }
     }
 
     private func petClicked(_ event: NSEvent) {

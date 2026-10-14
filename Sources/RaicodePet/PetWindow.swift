@@ -26,11 +26,31 @@ final class PetHostingView<Content: View>: NSHostingView<Content> {
     var onRightClick: ((NSEvent) -> Void)?
     var onMoved: (() -> Void)?
     var onDrag: ((CGFloat) -> Void)?
+    /// Pointer moves over the view (view coordinates), and the pointer leaving it — for petting.
+    var onHover: ((NSPoint) -> Void)?
+    var onHoverEnded: (() -> Void)?
 
     private var downLocation: NSPoint?
     private var dragged = false
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if !trackingAreas.contains(where: { $0.owner === self && $0.userInfo?["hover"] != nil }) {
+            addTrackingArea(NSTrackingArea(rect: .zero,
+                                           options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                           owner: self, userInfo: ["hover": true]))
+        }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        onHover?(convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHoverEnded?()
+    }
 
     override func mouseDown(with event: NSEvent) {
         downLocation = event.locationInWindow
