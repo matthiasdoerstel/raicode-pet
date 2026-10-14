@@ -192,3 +192,41 @@ final class LookDirectionTests: XCTestCase {
         XCTAssertEqual(LookDirection.index(dx: -10, dy: 9.5), 14)
     }
 }
+
+final class PetNamesTests: XCTestCase {
+    var defaults: UserDefaults!
+    var names: PetNames!
+
+    override func setUp() {
+        defaults = UserDefaults(suiteName: "PetNamesTests")!
+        defaults.removePersistentDomain(forName: "PetNamesTests")
+        names = PetNames(defaults: defaults)
+    }
+
+    func testNormalizeTrimsAndCaps() {
+        XCTAssertEqual(PetNames.normalize("  Rex \n"), "Rex")
+        XCTAssertNil(PetNames.normalize("   "))
+        XCTAssertEqual(PetNames.normalize(String(repeating: "a", count: 30))?.count, PetNames.maxLength)
+    }
+
+    func testFallsBackToDefaultName() {
+        XCTAssertEqual(names.name(for: "pixel-golden", default: "Sunny"), "Sunny")
+    }
+
+    func testEachPetKeepsItsOwnName() {
+        names.set("Rex", for: "pixel-golden")
+        names.set("Nugget", for: "hamjji")
+        XCTAssertEqual(names.name(for: "pixel-golden", default: "Sunny"), "Rex")
+        XCTAssertEqual(names.name(for: "hamjji", default: "Goldie"), "Nugget")
+        XCTAssertEqual(names.name(for: "pixel-cat", default: "Mochi"), "Mochi")
+    }
+
+    func testEmptyOrNilResetsToDefault() {
+        names.set("Rex", for: "pixel-golden")
+        names.set("  ", for: "pixel-golden")
+        XCTAssertNil(names.custom(for: "pixel-golden"))
+        names.set("Rex", for: "pixel-golden")
+        names.set(nil, for: "pixel-golden")
+        XCTAssertEqual(names.name(for: "pixel-golden", default: "Sunny"), "Sunny")
+    }
+}

@@ -14,7 +14,7 @@ enum PetAnimation: String, CaseIterable {
 /// Anything that can supply frames for the pet: the built-in pixel dog or a Codex pet.
 protocol PetArt {
     var id: String { get }
-    /// The pet's name, shown in its speech bubble.
+    /// The pet's built-in name; see `name` for what the user sees.
     var displayName: String { get }
     /// How the pet is listed in the menu.
     var menuTitle: String { get }
@@ -29,6 +29,8 @@ protocol PetArt {
 }
 
 extension PetArt {
+    /// The name shown in the bubble and menu: the user's own, else the built-in one.
+    var name: String { PetNames().name(for: id, default: displayName) }
     func lookFrame(_ index: Int) -> CGImage? { nil }
     var canLook: Bool { lookFrame(0) != nil }
     var canWalk: Bool { !frames(.walkRight).isEmpty }
@@ -40,7 +42,7 @@ final class PixelArt: PetArt {
     let character: PixelCharacter
     var id: String { character.id }
     var displayName: String { character.displayName }
-    var menuTitle: String { "\(character.displayName) — \(character.species)" }
+    var menuTitle: String { "\(name) — \(character.species)" }
     let displaySize = CGSize(width: 128, height: 128)  // 32px × 4, keeps pixels crisp
     let smoothScaling = false
 
@@ -129,7 +131,7 @@ final class CodexPetArt: PetArt {
 
     let id: String
     let displayName: String
-    var menuTitle: String { "\(displayName) — Codex pet" }
+    var menuTitle: String { "\(name) — Codex pet" }
     let displaySize = CGSize(width: 144, height: 156)
     let smoothScaling = true
 

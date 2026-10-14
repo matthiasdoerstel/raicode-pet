@@ -50,7 +50,7 @@ struct PetView: View {
         case .done: message = "Done!"
         case .failed: message = "something broke"
         }
-        return (pet.art.displayName, message)
+        return (pet.art.name, message)
     }
 
     /// Deep enough to carry white text (≥ 4.5:1) as a glass tint, and dark text-on-white as a fallback.

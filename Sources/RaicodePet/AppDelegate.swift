@@ -99,20 +99,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
     private func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Raicode Pet")
+        // A plain template icon: macOS draws it black or white to suit the menu bar and wallpaper.
+        let icon = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Raicode Pet")
+        icon?.isTemplate = true
+        statusItem.button?.image = icon
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
-        store.$state
-            .sink { [weak self] state in
-                self?.statusItem.button?.contentTintColor = switch state {
-                case .waiting: .systemOrange
-                case .done: .systemGreen
-                case .failed: .systemRed
-                default: nil
-                }
-            }
-            .store(in: &cancellables)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -160,6 +153,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             petMenu.addItem(item)
         }
         petMenu.addItem(.separator())
+        let rename = NSMenuItem(title: "Rename “\(controller.art.name)”…", action: #selector(renamePet),
+                                keyEquivalent: "")
+        rename.target = self
+        petMenu.addItem(rename)
+        petMenu.addItem(.separator())
         let reveal = NSMenuItem(title: "Open Pets Folder…", action: #selector(openPetsFolder), keyEquivalent: "")
         reveal.target = self
         petMenu.addItem(reveal)
@@ -188,6 +186,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         UserDefaults.standard.set(id, forKey: PetLibrary.selectionKey)
         controller.setArt(pet)
         resizePanel()
+    }
+
+    @objc private func renamePet() {
+        let art = controller.art
+        let names = PetNames()
+
+        let alert = NSAlert()
+        alert.messageText = "Rename \(art.name)"
+        alert.informativeText = "Each pet keeps its own name. Default: \(art.displayName)."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        if names.custom(for: art.id) != nil { alert.addButton(withTitle: "Reset to Default") }
+
+        let field = NSTextField(string: art.name)
+        field.placeholderString = art.displayName
+        field.frame = NSRect(x: 0, y: 0, width: 240, height: 24)
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+
+        // The app has no Dock icon; bring it forward so the field can take typing.
+        NSApp.activate(ignoringOtherApps: true)
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: names.set(field.stringValue, for: art.id)
+        case .alertThirdButtonReturn: names.set(nil, for: art.id)
+        default: return
+        }
+        controller.setArt(art)  // republishes, so the bubble picks up the new name
     }
 
     @objc private func openPetsFolder() {
