@@ -42,9 +42,6 @@ struct PetView: View {
 
     private var bubbleText: (title: String, message: String)? {
         guard let s = focus else { return nil }
-        let title = pet.art.displayName
-        // Only name the project when several sessions could be the one talking.
-        let several = store.sessions.filter { $0.state != .idle }.count > 1
         let message: String
         switch store.state {
         case .idle: return nil
@@ -53,15 +50,16 @@ struct PetView: View {
         case .done: message = "Done!"
         case .failed: message = "something broke"
         }
-        return (title, several ? "\(s.project): \(message)" : message)
+        return (pet.art.displayName, message)
     }
 
+    /// Deep enough to carry white text (≥ 4.5:1) as a glass tint, and dark text-on-white as a fallback.
     private var tint: Color {
         switch store.state {
-        case .waiting: return Color(red: 0.93, green: 0.55, blue: 0.12)
-        case .done: return Color(red: 0.16, green: 0.6, blue: 0.35)
-        case .failed: return Color(red: 0.82, green: 0.22, blue: 0.2)
-        default: return Color(white: 0.35)
+        case .waiting: return Color(red: 0.71, green: 0.33, blue: 0.04)
+        case .done: return Color(red: 0.12, green: 0.48, blue: 0.27)
+        case .failed: return Color(red: 0.71, green: 0.14, blue: 0.09)
+        default: return Color(white: 0.24)
         }
     }
 
@@ -76,46 +74,94 @@ struct SpeechBubble: View {
     let message: String
     let tint: Color
 
+    static let tailHeight: CGFloat = 7
+    static let cornerRadius: CGFloat = 10
+
+    // Glass tuning (macOS 26+, AppKit window-level glass).
+    /// .clear (least frost) or .regular.
+    @available(macOS 26.0, *) static var glassStyle: NSGlassEffectView.Style { .clear }
+    /// How strongly the glass is tinted toward the state colour.
+    static let tintAlpha: Double = 0.3
+
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                Text(message)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(tint)
+        Group {
+            if #available(macOS 26.0, *) {
+                // No tail: window glass only does rounded rects.
+                label(titleStyle: .white.opacity(0.9), messageStyle: .white)
+                    .shadow(color: .black.opacity(0.5), radius: 1.5, y: 0.5)
+                    .background(glass(cornerRadius: Self.cornerRadius))
+            } else {
+                label(titleStyle: .secondary, messageStyle: tint)
+                    .padding(.bottom, Self.tailHeight)
+                    .background(
+                        BubbleShape()
+                            .fill(Color.white)
+                            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+                    )
+                    .overlay(BubbleShape().stroke(Color.black.opacity(0.12), lineWidth: 1))
+                    .environment(\.colorScheme, .light)
             }
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
-            )
-            BubbleTail()
-                .fill(Color.white)
-                .frame(width: 12, height: 7)
-                .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
         }
+        // Width cap goes outside the bubble, so the bubble hugs short messages.
         .frame(maxWidth: PetView.width - 16)
-        .environment(\.colorScheme, .light)
+    }
+
+    @available(macOS 26.0, *)
+    private func glass(cornerRadius: CGFloat) -> some View {
+        WindowGlass(style: Self.glassStyle, cornerRadius: cornerRadius,
+                    tint: NSColor(tint).withAlphaComponent(Self.tintAlpha))
+    }
+
+    private func label(titleStyle: some ShapeStyle, messageStyle: some ShapeStyle) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundStyle(titleStyle)
+            Text(message)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(messageStyle)
+        }
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
 }
 
-struct BubbleTail: Shape {
+/// AppKit's window-level Liquid Glass, which refracts what's behind the window
+/// (unlike SwiftUI's glassEffect, which only has our transparent window to work with).
+@available(macOS 26.0, *)
+struct WindowGlass: NSViewRepresentable {
+    var style: NSGlassEffectView.Style
+    var cornerRadius: CGFloat
+    var tint: NSColor?
+
+    func makeNSView(context: Context) -> NSGlassEffectView {
+        let view = NSGlassEffectView()
+        updateNSView(view, context: context)
+        return view
+    }
+
+    func updateNSView(_ view: NSGlassEffectView, context: Context) {
+        view.style = style
+        view.cornerRadius = cornerRadius
+        view.tintColor = tint
+    }
+}
+
+/// Rounded bubble with a tail centred at the bottom, as one shape so glass flows into the tail.
+struct BubbleShape: Shape {
+    var cornerRadius: CGFloat = 10
+    var tailWidth: CGFloat = 12
+    var tailHeight: CGFloat = SpeechBubble.tailHeight
+
     func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        p.closeSubpath()
-        return p
+        let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height - tailHeight)
+        var tail = Path()
+        tail.move(to: CGPoint(x: body.midX - tailWidth / 2, y: body.maxY - 1))
+        tail.addLine(to: CGPoint(x: body.midX + tailWidth / 2, y: body.maxY - 1))
+        tail.addLine(to: CGPoint(x: body.midX, y: rect.maxY))
+        tail.closeSubpath()
+        return Path(roundedRect: body, cornerRadius: cornerRadius, style: .continuous).union(tail)
     }
 }
