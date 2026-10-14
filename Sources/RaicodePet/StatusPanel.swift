@@ -20,13 +20,8 @@ struct StatusPanel: View {
                         SessionRow(session: s, now: app.now) { app.select(s) }
                     }
                 }
-                .padding(.vertical, 6)
+                .padding(.top, 6)
             }
-
-            Divider()
-            Toggle("Quiet Mode", isOn: Binding(get: { app.quietMode }, set: { _ in app.toggleQuietMode() }))
-                .toggleStyle(.switch)
-                .padding(.top, 10)
         }
         .padding(16)
         .frame(width: 300)
@@ -55,7 +50,8 @@ struct StatusPanel: View {
     }
 }
 
-/// One session, like a Weather location row: symbol and name left, status right.
+/// One session, like a Weather location row: symbol and name left, status right,
+/// then what was asked and what came back.
 private struct SessionRow: View {
     let session: SessionRecord
     let now: Date
@@ -65,15 +61,19 @@ private struct SessionRow: View {
     var body: some View {
         let pill = StatusPill.content(for: session, now: now)
         Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: pill.symbol)
-                    .frame(width: 18)
-                Text(session.project)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 8)
-                Text(pill.text ?? "idle")
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 10) {
+                    Image(systemName: pill.symbol)
+                        .frame(width: 18)
+                    Text(session.project)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Text(pill.text ?? "idle")
+                        .foregroundStyle(.secondary)
+                }
+                summary
+                    .padding(.leading, 28)  // under the project name, past the symbol
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
@@ -85,5 +85,26 @@ private struct SessionRow: View {
         .padding(.horizontal, -8)  // keep the text aligned with the header; the hover fill bleeds out
         .onHover { hovering = $0 }
         .help("Jump to this session")
+    }
+
+    @ViewBuilder private var summary: some View {
+        if session.prompt != nil || session.result != nil {
+            VStack(alignment: .leading, spacing: 3) {
+                if let prompt = session.prompt {
+                    wrapping(Text(prompt).fontWeight(.medium))
+                }
+                if let result = session.result {
+                    wrapping(Text(result).foregroundStyle(.secondary))
+                }
+            }
+            .font(.callout)
+        }
+    }
+
+    /// Full width, wrapped in full (TaskText already caps the length).
+    private func wrapping(_ text: some View) -> some View {
+        text
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

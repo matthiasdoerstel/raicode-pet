@@ -7,6 +7,10 @@ public struct HookInput: Decodable, Sendable {
     public var hookEventName: String?
     public var toolName: String?
     public var notificationType: String?
+    public var prompt: String?
+    /// Who wrote the prompt: "user", or a machine source like "loop_wakeup".
+    public var source: String?
+    public var lastAssistantMessage: String?
 
     enum CodingKeys: String, CodingKey {
         case sessionId = "session_id"
@@ -14,15 +18,21 @@ public struct HookInput: Decodable, Sendable {
         case hookEventName = "hook_event_name"
         case toolName = "tool_name"
         case notificationType = "notification_type"
+        case prompt, source
+        case lastAssistantMessage = "last_assistant_message"
     }
 
     public init(sessionId: String?, cwd: String? = nil, hookEventName: String?,
-                toolName: String? = nil, notificationType: String? = nil) {
+                toolName: String? = nil, notificationType: String? = nil, prompt: String? = nil,
+                source: String? = nil, lastAssistantMessage: String? = nil) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.hookEventName = hookEventName
         self.toolName = toolName
         self.notificationType = notificationType
+        self.prompt = prompt
+        self.source = source
+        self.lastAssistantMessage = lastAssistantMessage
     }
 
     public static func parse(_ data: Data) -> HookInput? {
@@ -103,6 +113,15 @@ public enum EventMapper {
                 // a new prompt starts a new task; otherwise keep the running task's start
                 taskStartedAt = input.hookEventName == "UserPromptSubmit" ? now : (previous?.taskStartedAt ?? now)
             }
+            // A typed prompt starts a new task summary; machine-injected turns keep the old one.
+            let newPrompt = input.hookEventName == "UserPromptSubmit" && (input.source ?? "user") == "user"
+                ? TaskText.prompt(input.prompt) : nil
+            let prompt = newPrompt ?? previous?.prompt
+            let result: String?
+            switch state {
+            case .done, .failed: result = TaskText.result(input.lastAssistantMessage) ?? previous?.result
+            default: result = newPrompt != nil ? nil : previous?.result
+            }
             return .write(SessionRecord(
                 sessionId: sessionId,
                 cwd: cwd,
@@ -112,7 +131,9 @@ public enum EventMapper {
                 pid: pid ?? previous?.pid,
                 updatedAt: now,
                 taskStartedAt: taskStartedAt,
-                stateSince: previous?.state == state ? (previous?.stateSince ?? now) : now
+                stateSince: previous?.state == state ? (previous?.stateSince ?? now) : now,
+                prompt: prompt,
+                result: result
             ))
         }
     }

@@ -10,6 +10,36 @@ final class EventMapperTests: XCTestCase {
                   toolName: tool, notificationType: notification)
     }
 
+    func testTaskSummaryFollowsPromptAndReply() {
+        let ask = HookInput(sessionId: "s1", cwd: "/p", hookEventName: "UserPromptSubmit",
+                            prompt: "  get rid of\nthat outline ", source: "user")
+        let stop = HookInput(sessionId: "s1", cwd: "/p", hookEventName: "Stop",
+                             lastAssistantMessage: "## Done\n\nRemoved the **window shadow**.")
+        let wake = HookInput(sessionId: "s1", cwd: "/p", hookEventName: "UserPromptSubmit",
+                             prompt: "<loop>", source: "loop_wakeup")
+        guard case let .write(asked) = EventMapper.apply(ask, to: nil, pid: 1, now: now),
+              case let .write(done) = EventMapper.apply(stop, to: asked, pid: 1, now: now),
+              case let .write(woken) = EventMapper.apply(wake, to: done, pid: 1, now: now),
+              case let .write(next) = EventMapper.apply(ask, to: done, pid: 1, now: now) else {
+            return XCTFail("expected writes")
+        }
+        XCTAssertEqual(asked.prompt, "get rid of")
+        XCTAssertNil(asked.result)
+        XCTAssertEqual(done.prompt, "get rid of")
+        XCTAssertEqual(done.result, "Done")
+        XCTAssertEqual(woken.prompt, "get rid of", "machine prompts keep the user's task")
+        XCTAssertEqual(woken.result, "Done")
+        XCTAssertNil(next.result, "a new prompt clears the old result")
+    }
+
+    func testTaskTextCleanup() {
+        XCTAssertEqual(TaskText.result("- Committed as `cd2f926` — see [the PR](https://x).\n- more"),
+                       "Committed as cd2f926 — see the PR. more")
+        XCTAssertEqual(TaskText.result("```\ncode\n```\n\nAfter code."), "After code.")
+        XCTAssertNil(TaskText.prompt("   \n  "))
+        XCTAssertEqual(TaskText.prompt(String(repeating: "a", count: 300))?.count, TaskText.maxLength)
+    }
+
     func testEventToStateMapping() {
         XCTAssertEqual(EventMapper.action(for: input("SessionStart")), .set(.idle, detail: nil))
         XCTAssertEqual(EventMapper.action(for: input("UserPromptSubmit")), .set(.working, detail: nil))

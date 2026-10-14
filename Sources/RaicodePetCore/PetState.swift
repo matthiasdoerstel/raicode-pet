@@ -32,10 +32,14 @@ public struct SessionRecord: Codable, Equatable, Sendable {
     public var taskStartedAt: Date?
     /// When the session entered its current state; repeat events in the same state keep it.
     public var stateSince: Date?
+    /// What the user asked for in the current task, cleaned to one line.
+    public var prompt: String?
+    /// The opening of Claude's final reply once the task stopped; cleared by a new prompt.
+    public var result: String?
 
     public init(sessionId: String, cwd: String, project: String, state: PetState,
                 detail: String? = nil, pid: Int32? = nil, updatedAt: Date, taskStartedAt: Date? = nil,
-                stateSince: Date? = nil) {
+                stateSince: Date? = nil, prompt: String? = nil, result: String? = nil) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.project = project
@@ -45,6 +49,8 @@ public struct SessionRecord: Codable, Equatable, Sendable {
         self.updatedAt = updatedAt
         self.taskStartedAt = taskStartedAt
         self.stateSince = stateSince
+        self.prompt = prompt
+        self.result = result
     }
 
     /// How long the task ran, up to the latest update.
