@@ -51,10 +51,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             guard let self, let view = self.panel.contentView else { return }
             NSMenu.popUpContextMenu(self.makeMenu(), with: event, for: view)
         }
-        view.onMoved = { [weak self] in self.map { PetPlacement.save($0.panel) } }
+        view.onDrag = { [weak self] dx in self?.controller.dragged(dx: dx) }
+        view.onMoved = { [weak self] in
+            guard let self else { return }
+            self.controller.dragEnded()
+            PetPlacement.save(self.panel)
+        }
         panel = PetPanel(content: view)
         panel.setContentSize(view.fittingSize)
         PetPlacement.restore(panel)
+        controller.window = panel
         panel.orderFrontRegardless()
     }
 

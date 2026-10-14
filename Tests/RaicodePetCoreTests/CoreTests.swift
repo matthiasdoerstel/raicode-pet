@@ -177,3 +177,18 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertThrowsError(try HookInstaller.install(into: Data("{oops".utf8), executablePath: exe))
     }
 }
+
+final class LookDirectionTests: XCTestCase {
+    func testCardinalAndDiagonalDirections() {
+        XCTAssertEqual(LookDirection.index(dx: 0, dy: 10), 0)    // up
+        XCTAssertEqual(LookDirection.index(dx: 10, dy: 10), 2)   // up-right, 45°
+        XCTAssertEqual(LookDirection.index(dx: 10, dy: 0), 4)    // right
+        XCTAssertEqual(LookDirection.index(dx: 0, dy: -10), 8)   // down
+        XCTAssertEqual(LookDirection.index(dx: -10, dy: 0), 12)  // left
+    }
+
+    func testWrapsAroundNearUp() {
+        XCTAssertEqual(LookDirection.index(dx: -0.1, dy: 10), 0)
+        XCTAssertEqual(LookDirection.index(dx: -10, dy: 9.5), 14)
+    }
+}

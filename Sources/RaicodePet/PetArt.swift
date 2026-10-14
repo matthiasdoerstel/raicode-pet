@@ -1,11 +1,14 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import RaicodePetCore
 
 enum PetAnimation: String, CaseIterable {
     case idle, stretch, lookAround, working, waiting, done, failed
     /// One-shots played on top of the state loop.
     case celebrate, wave
+    /// Looped while the pet is being dragged.
+    case walkRight, walkLeft
 }
 
 /// Anything that can supply frames for the pet: the built-in pixel dog or a Codex pet.
@@ -20,7 +23,15 @@ protocol PetArt {
     /// Pixel art wants nearest-neighbour; illustrations want smooth scaling.
     var smoothScaling: Bool { get }
     func frames(_ animation: PetAnimation) -> [CGImage]
-    func frameDuration(_ animation: PetAnimation) -> TimeInterval
+    func frameDuration(_ animation: PetAnimation, index: Int) -> TimeInterval
+    /// The pose facing look direction `index` (0 = up, clockwise, 16 steps), if the pet has them.
+    func lookFrame(_ index: Int) -> CGImage?
+}
+
+extension PetArt {
+    func lookFrame(_ index: Int) -> CGImage? { nil }
+    var canLook: Bool { lookFrame(0) != nil }
+    var canWalk: Bool { !frames(.walkRight).isEmpty }
 }
 
 // MARK: - Built-in pixel pets
@@ -53,9 +64,9 @@ final class PixelArt: PetArt {
         return images
     }
 
-    func frameDuration(_ animation: PetAnimation) -> TimeInterval {
+    func frameDuration(_ animation: PetAnimation, index: Int) -> TimeInterval {
         switch animation {
-        case .idle: return 1.1
+        case .idle, .walkRight, .walkLeft: return 1.1
         case .stretch: return 0.7
         case .lookAround: return 0.45
         case .working: return 0.3
@@ -90,11 +101,31 @@ final class PixelArt: PetArt {
 // MARK: - Codex pets
 
 /// A Codex-format pet: `pet.json` + an 8-column spritesheet of 192×208 cells.
+/// Rows, frame counts and timings follow Codex's V2 spec (hatch-pet `animation-rows.md`).
 final class CodexPetArt: PetArt {
     static let cell = CGSize(width: 192, height: 208)
     static let columns = 8
-    static let rowNames = ["idle", "running-right", "running-left", "waving", "jumping",
-                           "failed", "waiting", "running", "review", "stretching", "looking-around"]
+
+    /// Standard rows in atlas order, with Codex's per-frame durations in ms.
+    /// The duration count is also the row's frame count.
+    static let rows: [(name: String, ms: [Int])] = [
+        ("idle", [280, 110, 110, 140, 140, 320]),
+        ("running-right", Array(repeating: 120, count: 7) + [220]),
+        ("running-left", Array(repeating: 120, count: 7) + [220]),
+        ("waving", Array(repeating: 140, count: 3) + [280]),
+        ("jumping", Array(repeating: 140, count: 4) + [280]),
+        ("failed", Array(repeating: 140, count: 7) + [240]),
+        ("waiting", Array(repeating: 150, count: 5) + [260]),
+        ("running", Array(repeating: 120, count: 5) + [220]),
+        ("review", Array(repeating: 150, count: 5) + [280]),
+    ]
+    /// V2 sheets add two rows of 8 look poses each: 0°…157.5°, then 180°…337.5°.
+    static let lookRowStart = 9
+
+    private struct Sequence {
+        var frames: [CGImage] = []
+        var ms: [Int] = []
+    }
 
     let id: String
     let displayName: String
@@ -102,7 +133,9 @@ final class CodexPetArt: PetArt {
     let displaySize = CGSize(width: 144, height: 156)
     let smoothScaling = true
 
-    private var rows: [String: [CGImage]] = [:]
+    private var sequences: [String: Sequence] = [:]
+    private var looks: [CGImage] = []
+    private var glance = Sequence()
 
     init?(folder: URL) {
         struct Manifest: Decodable {
@@ -119,50 +152,74 @@ final class CodexPetArt: PetArt {
 
         id = manifest.id ?? folder.lastPathComponent
         displayName = manifest.displayName ?? id
-        rows = Self.slice(atlas)
-        guard rows["idle"]?.isEmpty == false else { return nil }
+        guard let sliced = Self.slice(atlas), let idle = sliced.rows["idle"], !idle.isEmpty else { return nil }
+        for (name, ms) in Self.rows {
+            let frames = sliced.rows[name] ?? []
+            sequences[name] = Sequence(frames: frames, ms: Array(ms.prefix(frames.count)))
+        }
+        if sliced.looks.count == LookDirection.count {
+            looks = sliced.looks
+            glance = Self.glance(idle: idle[0], looks: looks)
+        }
     }
 
-    func frames(_ animation: PetAnimation) -> [CGImage] {
+    /// An idle "look around": glance right, back, glance left, back — built from the look poses.
+    private static func glance(idle: CGImage, looks: [CGImage]) -> Sequence {
+        // Look indices: 4 = right (90°), 12 = left (270°); neighbours ease in and out.
+        let steps: [(CGImage, Int)] = [
+            (looks[5], 150), (looks[4], 900), (looks[5], 150), (idle, 400),
+            (looks[11], 150), (looks[12], 900), (looks[11], 150), (idle, 300),
+        ]
+        return Sequence(frames: steps.map(\.0), ms: steps.map(\.1))
+    }
+
+    private func sequence(_ animation: PetAnimation) -> Sequence {
+        if animation == .lookAround, !glance.frames.isEmpty { return glance }
         let candidates: [String]
         switch animation {
         case .idle: candidates = ["idle"]
-        case .stretch: candidates = ["stretching", "looking-around"]
-        case .lookAround: candidates = ["looking-around", "stretching"]
-        case .working: candidates = ["running", "running-right"]
+        case .stretch, .lookAround, .wave: candidates = ["waving"]
+        case .working: candidates = ["running"]
         case .waiting: candidates = ["waiting"]
         case .done: candidates = ["review"]
         case .failed: candidates = ["failed"]
         case .celebrate: candidates = ["jumping"]
-        case .wave: candidates = ["waving"]
+        case .walkRight: candidates = ["running-right"]
+        case .walkLeft: candidates = ["running-left", "running-right"]
         }
         for name in candidates {
-            if let f = rows[name], !f.isEmpty { return f }
+            if let s = sequences[name], !s.frames.isEmpty { return s }
         }
-        return rows["idle"] ?? []
+        return sequences["idle"] ?? Sequence()
     }
 
-    func frameDuration(_ animation: PetAnimation) -> TimeInterval {
-        switch animation {
-        case .idle, .stretch, .lookAround: return 0.16
-        case .failed: return 0.18
-        case .working: return 0.2
-        default: return 0.11
-        }
+    func frames(_ animation: PetAnimation) -> [CGImage] {
+        sequence(animation).frames
     }
 
-    /// Cuts the atlas into rows; each row ends at its first fully transparent cell.
-    static func slice(_ atlas: CGImage) -> [String: [CGImage]] {
+    func frameDuration(_ animation: PetAnimation, index: Int) -> TimeInterval {
+        let ms = sequence(animation).ms
+        guard !ms.isEmpty else { return 0.15 }
+        return Double(ms[min(index, ms.count - 1)]) / 1000
+    }
+
+    func lookFrame(_ index: Int) -> CGImage? {
+        looks.isEmpty ? nil : looks[index % looks.count]
+    }
+
+    /// Cuts the atlas into standard rows (each capped at its spec length and ending at its
+    /// first fully transparent cell) plus the 16 look poses, when present.
+    static func slice(_ atlas: CGImage) -> (rows: [String: [CGImage]], looks: [CGImage])? {
         let w = atlas.width, h = atlas.height
         // Some sheets are exported at a different scale — derive the cell from the column count.
         let cellW = w / columns
         let cellH = Int((Double(cellW) * Double(cell.height) / Double(cell.width)).rounded())
-        guard cellW > 0, cellH > 0 else { return [:] }
+        guard cellW > 0, cellH > 0 else { return nil }
 
         var pixels = [UInt8](repeating: 0, count: w * h * 4)
         guard let ctx = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8,
                                   bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return [:] }
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         ctx.draw(atlas, in: CGRect(x: 0, y: 0, width: w, height: h))
 
         func cellIsEmpty(col: Int, row: Int) -> Bool {
@@ -180,18 +237,30 @@ final class CodexPetArt: PetArt {
             return true
         }
 
-        var result: [String: [CGImage]] = [:]
-        let rowCount = min(h / cellH, rowNames.count)
-        for row in 0..<rowCount {
-            var frames: [CGImage] = []
-            for col in 0..<columns {
-                if cellIsEmpty(col: col, row: row) { break }
-                let rect = CGRect(x: col * cellW, y: row * cellH, width: cellW, height: cellH)
-                if let img = atlas.cropping(to: rect) { frames.append(img) }
-            }
-            result[rowNames[row]] = frames
+        func crop(col: Int, row: Int) -> CGImage? {
+            atlas.cropping(to: CGRect(x: col * cellW, y: row * cellH, width: cellW, height: cellH))
         }
-        return result
+
+        let rowCount = h / cellH
+        var rows: [String: [CGImage]] = [:]
+        for (row, spec) in Self.rows.enumerated() where row < rowCount {
+            var frames: [CGImage] = []
+            for col in 0..<min(columns, spec.ms.count) {
+                if cellIsEmpty(col: col, row: row) { break }
+                if let img = crop(col: col, row: row) { frames.append(img) }
+            }
+            rows[spec.name] = frames
+        }
+
+        var looks: [CGImage] = []
+        if rowCount >= lookRowStart + 2 {
+            for row in lookRowStart..<lookRowStart + 2 {
+                for col in 0..<columns {
+                    if let img = crop(col: col, row: row) { looks.append(img) }
+                }
+            }
+        }
+        return (rows, looks)
     }
 }
 

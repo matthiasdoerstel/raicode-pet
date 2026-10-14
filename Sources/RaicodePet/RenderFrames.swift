@@ -14,6 +14,11 @@ enum RenderFrames {
                 }
                 print(pet.id, animation.rawValue, pet.frames(animation).count)
             }
+            for i in 0..<16 {
+                guard let frame = pet.lookFrame(i),
+                      let png = NSBitmapImageRep(cgImage: frame).representation(using: .png, properties: [:]) else { continue }
+                try? png.write(to: dir.appendingPathComponent("\(pet.id)-look-\(i).png"))
+            }
         }
     }
 }

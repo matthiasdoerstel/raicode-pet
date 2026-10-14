@@ -25,6 +25,7 @@ final class PetHostingView<Content: View>: NSHostingView<Content> {
     var onClick: ((NSEvent) -> Void)?
     var onRightClick: ((NSEvent) -> Void)?
     var onMoved: (() -> Void)?
+    var onDrag: ((CGFloat) -> Void)?
 
     private var downLocation: NSPoint?
     private var dragged = false
@@ -45,6 +46,7 @@ final class PetHostingView<Content: View>: NSHostingView<Content> {
         origin.x += p.x - start.x
         origin.y += p.y - start.y
         window.setFrameOrigin(origin)
+        onDrag?(p.x - start.x)
     }
 
     override func mouseUp(with event: NSEvent) {
