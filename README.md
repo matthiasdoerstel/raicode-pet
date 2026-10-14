@@ -14,7 +14,18 @@ Native Swift (AppKit + SwiftUI) with Liquid Glass, no third-party dependencies. 
 - **Xcode 26** or its Command Line Tools (`xcode-select --install`). The app must be built against the macOS 26 SDK, otherwise Liquid Glass silently falls back to a flat look.
 - **Raicode**, with sessions started from a terminal.
 
-### 2. Build and install
+### 2. Install
+
+Paste this into Terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/matthiasdoerstel/raicode-pet/main/install.sh | bash
+```
+
+It downloads the source to `~/.raicode-pet/source`, builds the app on your Mac, installs it to `/Applications` and opens it. Since it's built locally, macOS opens it without a Gatekeeper warning.
+
+<details>
+<summary>Or build it by hand</summary>
 
 ```bash
 git clone https://github.com/matthiasdoerstel/raicode-pet.git
@@ -23,7 +34,8 @@ cd raicode-pet
 open /Applications/RaicodePet.app
 ```
 
-`build_app.sh` builds a release binary, wraps it in an ad-hoc signed `RaicodePet.app` and installs it to `/Applications`. Since you built it yourself, macOS opens it without a Gatekeeper warning.
+`build_app.sh` builds a release binary, wraps it in an ad-hoc signed `RaicodePet.app` and installs it to `/Applications`.
+</details>
 
 ### 3. Connect it to Raicode
 
@@ -39,18 +51,13 @@ Then:
 
 ### Update
 
-```bash
-cd raicode-pet
-git pull
-./build_app.sh
-open /Applications/RaicodePet.app
-```
+Run the install line again. It pulls the latest source, rebuilds and restarts the app. (Built by hand? `git pull && ./build_app.sh`.)
 
 ### Uninstall
 
 1. Right-click the paw, choose **Remove Raicode Hooks**, then **Quit Raicode Pet**.
 2. Delete `/Applications/RaicodePet.app`.
-3. Optional: remove its data with `rm -rf ~/.raicode-pet` (this also deletes custom pets in `~/.raicode-pet/pets`) and its settings with `defaults delete com.matthias.raicodepet`.
+3. Optional: remove its data and downloaded source with `rm -rf ~/.raicode-pet` (this also deletes custom pets in `~/.raicode-pet/pets`) and its settings with `defaults delete com.matthias.raicodepet`.
 
 ## What the pet shows
 
