@@ -32,4 +32,16 @@ public enum StatusPill {
             return Content(symbol: "xmark.octagon.fill", text: "failed")
         }
     }
+
+    /// The dropdown header: how many sessions, and what needs attention. Rows carry each session's own status.
+    public static func overview(of sessions: [SessionRecord]) -> String {
+        guard !sessions.isEmpty else { return "All quiet" }
+        func count(_ state: PetState) -> Int { sessions.filter { $0.state == state }.count }
+        var parts = [sessions.count == 1 ? "1 session" : "\(sessions.count) sessions"]
+        let waiting = count(.waiting), failed = count(.failed), done = count(.done)
+        if waiting > 0 { parts.append(waiting == 1 ? "1 needs you" : "\(waiting) need you") }
+        if failed > 0 { parts.append("\(failed) failed") }
+        if done > 0 { parts.append("\(done) done") }
+        return parts.joined(separator: " · ")
+    }
 }

@@ -10,6 +10,16 @@ final class EventMapperTests: XCTestCase {
                   toolName: tool, notificationType: notification)
     }
 
+    func testOverview() {
+        func rec(_ id: String, _ state: PetState) -> SessionRecord {
+            SessionRecord(sessionId: id, cwd: "/p", project: "p", state: state, updatedAt: now)
+        }
+        XCTAssertEqual(StatusPill.overview(of: []), "All quiet")
+        XCTAssertEqual(StatusPill.overview(of: [rec("a", .working)]), "1 session")
+        XCTAssertEqual(StatusPill.overview(of: [rec("a", .waiting), rec("b", .waiting), rec("c", .done)]),
+                       "3 sessions · 2 need you · 1 done")
+    }
+
     func testTaskSummaryFollowsPromptAndReply() {
         let ask = HookInput(sessionId: "s1", cwd: "/p", hookEventName: "UserPromptSubmit",
                             prompt: "  get rid of\nthat outline ", source: "user")
@@ -26,9 +36,9 @@ final class EventMapperTests: XCTestCase {
         XCTAssertEqual(asked.prompt, "get rid of")
         XCTAssertNil(asked.result)
         XCTAssertEqual(done.prompt, "get rid of")
-        XCTAssertEqual(done.result, "Done")
+        XCTAssertEqual(done.result, "Removed the window shadow.")
         XCTAssertEqual(woken.prompt, "get rid of", "machine prompts keep the user's task")
-        XCTAssertEqual(woken.result, "Done")
+        XCTAssertEqual(woken.result, "Removed the window shadow.")
         XCTAssertNil(next.result, "a new prompt clears the old result")
     }
 
@@ -36,6 +46,10 @@ final class EventMapperTests: XCTestCase {
         XCTAssertEqual(TaskText.result("- Committed as `cd2f926` — see [the PR](https://x).\n- more"),
                        "Committed as cd2f926 — see the PR. more")
         XCTAssertEqual(TaskText.result("```\ncode\n```\n\nAfter code."), "After code.")
+        XCTAssertEqual(TaskText.result("Both changes are in:\n\n- **Header:** shows the count.\n- Arrows spin."),
+                       "Both changes are in: Header: shows the count. Arrows spin.")
+        let long = TaskText.result(String(repeating: "word ", count: 60))!
+        XCTAssertTrue(long.hasSuffix("word…"), "cuts at a word boundary")
         XCTAssertNil(TaskText.prompt("   \n  "))
         XCTAssertEqual(TaskText.prompt(String(repeating: "a", count: 300))?.count, TaskText.maxLength)
     }

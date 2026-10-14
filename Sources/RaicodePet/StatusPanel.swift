@@ -38,15 +38,10 @@ struct StatusPanel: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(pet.art.name).font(.headline)
-                Text(summary).foregroundStyle(.secondary)
+                Text(StatusPill.overview(of: store.sessions)).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
         }
-    }
-
-    private var summary: String {
-        let focus = store.sessions.first { $0.state == store.state }
-        return StatusPill.content(for: focus, now: app.now).text ?? "All quiet"
     }
 }
 
@@ -64,6 +59,7 @@ private struct SessionRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 10) {
                     Image(systemName: pill.symbol)
+                        .modifier(StateSymbolEffect(state: session.state))
                         .frame(width: 18)
                     Text(session.project)
                         .lineLimit(1)
@@ -106,5 +102,27 @@ private struct SessionRow: View {
         text
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// The same symbol effects as the quiet mode menu bar pill: working spins,
+/// needs-you wiggles now and then, done bounces once.
+private struct StateSymbolEffect: ViewModifier {
+    let state: PetState
+    @State private var bounce = 0
+
+    func body(content: Content) -> some View {
+        switch state {
+        case .working:
+            content.symbolEffect(.rotate, options: .repeat(.continuous))
+        case .waiting:
+            content.symbolEffect(.wiggle, options: .repeat(.periodic(delay: 4)))
+        case .done:
+            content
+                .symbolEffect(.bounce, options: .nonRepeating, value: bounce)
+                .onAppear { bounce += 1 }
+        default:
+            content
+        }
     }
 }
