@@ -110,6 +110,8 @@ The speech bubble is Liquid Glass, tinted by state, and shows how long it's been
 
 Pets in Codex Pets format are picked up from `~/.raicode-pet/pets` and `~/.codex/pets`. Both v1 and v2 spritesheets work. v2 pets also get per-frame timings, look-at-pointer poses and running while dragged. Use **Open Pets Folder…** and **Reload Pets** in the Pet menu.
 
+Works best with v2 pets. Browse them at [codex-pets.net](https://codex-pets.net/#/?format=v2), add the pet to the folder from **Open Pets Folder…**, then choose **Reload Pets**.
+
 ## How it works
 
 ```
