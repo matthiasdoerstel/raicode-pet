@@ -4,6 +4,8 @@ import SwiftUI
 struct PetView: View {
     @ObservedObject var pet: PetController
     @ObservedObject var store: SessionStore
+    /// The bubble lives in its own glass window (`BubbleWindow`); this view only reserves its space.
+    var onBubble: (BubbleSpec?) -> Void = { _ in }
 
     static let bubbleHeight: CGFloat = 64
     static let width: CGFloat = 200
@@ -18,20 +20,18 @@ struct PetView: View {
     private func content(now: Date) -> some View {
         let bubbleText = bubbleText(now: now)
         return VStack(spacing: 2) {
-            ZStack(alignment: .bottom) {
-                Color.clear
-                if let text = bubbleText {
-                    SpeechBubble(title: text.title, message: text.message, tint: tint)
-                        .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
-                }
-            }
-            .frame(height: Self.bubbleHeight)
+            Color.clear
+                .frame(height: Self.bubbleHeight)
 
             sprite(label: accessibilityText(bubbleText))
                 .frame(width: pet.art.displaySize.width, height: pet.art.displaySize.height)
         }
         .frame(width: Self.width)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: bubbleText?.message)
+        .onChange(of: bubbleSpec(bubbleText), initial: true) { _, spec in onBubble(spec) }
+    }
+
+    private func bubbleSpec(_ text: (title: String, message: String)?) -> BubbleSpec? {
+        text.map { BubbleSpec(title: $0.title, message: $0.message, tint: tint) }
     }
 
     @ViewBuilder private func sprite(label: String) -> some View {
@@ -62,72 +62,18 @@ struct PetView: View {
         return (pet.art.name, message + elapsed)
     }
 
-    /// Deep enough to carry white text (≥ 4.5:1) as a glass tint, and dark text-on-white as a fallback.
-    private var tint: Color {
+    /// State colour for the bubble glass; `nil` keeps it neutral.
+    private var tint: NSColor? {
         switch store.state {
-        case .waiting: return Color(red: 0.71, green: 0.33, blue: 0.04)
-        case .done: return Color(red: 0.12, green: 0.48, blue: 0.27)
-        case .failed: return Color(red: 0.71, green: 0.14, blue: 0.09)
-        default: return Color(white: 0.24)
+        case .waiting: return NSColor(srgbRed: 1.0, green: 0.55, blue: 0.1, alpha: 0.2)
+        case .done: return NSColor(srgbRed: 0.2, green: 0.8, blue: 0.4, alpha: 0.2)
+        case .failed: return NSColor(srgbRed: 0.95, green: 0.25, blue: 0.2, alpha: 0.2)
+        default: return nil
         }
     }
 
     private func accessibilityText(_ bubbleText: (title: String, message: String)?) -> String {
         guard let t = bubbleText else { return "Raicode pet, sleeping" }
         return "Raicode pet: \(t.title), \(t.message)"
-    }
-}
-
-struct SpeechBubble: View {
-    let title: String
-    let message: String
-    let tint: Color
-
-    var body: some View {
-        // Built like the menu bar dropdown: an NSGlassEffectView that *contains* the text.
-        // (SwiftUI's .glassEffect rendered as a flat frosted fill here, losing the tint and the rim.)
-        GlassContainer(cornerRadius: 12, tint: NSColor(tint)) { label }
-            .fixedSize()
-            // Width cap goes outside the bubble, so the bubble hugs short messages.
-            .frame(maxWidth: PetView.width - 16)
-    }
-
-    private var label: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.85))
-            Text(message)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-        }
-        .lineLimit(1)
-        .truncationMode(.middle)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-    }
-}
-
-/// Hosts SwiftUI content *inside* an NSGlassEffectView, the way AppKit expects glass to be used.
-struct GlassContainer<Content: View>: NSViewRepresentable {
-    var cornerRadius: CGFloat
-    var tint: NSColor?
-    @ViewBuilder var content: Content
-
-    func makeNSView(context: Context) -> NSGlassEffectView {
-        let glass = NSGlassEffectView()
-        glass.contentView = NSHostingView(rootView: content)
-        updateNSView(glass, context: context)
-        return glass
-    }
-
-    func updateNSView(_ glass: NSGlassEffectView, context: Context) {
-        glass.cornerRadius = cornerRadius
-        glass.tintColor = tint
-        (glass.contentView as? NSHostingView<Content>)?.rootView = content
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSGlassEffectView, context: Context) -> CGSize? {
-        (nsView.contentView as? NSHostingView<Content>)?.fittingSize
     }
 }

@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Observ
     @Published private(set) var pets: [PetArt]
     let controller: PetController
     var panel: PetPanel!
+    private var bubble: BubbleWindow?
+    private var bubbleSpec: BubbleSpec?
     var statusItem: NSStatusItem!
     var cancellables: Set<AnyCancellable> = []
     private var clock: Timer?
@@ -74,7 +76,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Observ
     // MARK: - Panel
 
     private func buildPanel() {
-        let view = PetHostingView(rootView: PetView(pet: controller, store: store))
+        let view = PetHostingView(rootView: PetView(pet: controller, store: store) { [weak self] spec in
+            self?.bubbleSpec = spec
+            self?.bubble?.update(spec)
+        })
         view.onClick = { [weak self] event in self?.petClicked(event) }
         view.onRightClick = { [weak self] event in
             guard let self, let view = self.panel.contentView else { return }
@@ -90,7 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Observ
         panel.setContentSize(view.fittingSize)
         PetPlacement.restore(panel)
         controller.window = panel
+        bubble = BubbleWindow(parent: panel, eventTarget: view)
         if !quietMode { panel.orderFrontRegardless() }
+        bubble?.update(bubbleSpec)
     }
 
     private func petClicked(_ event: NSEvent) {
@@ -300,11 +307,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Observ
     @objc private func togglePet() {
         if quietMode { return toggleQuietMode() }  // showing the pet ends quiet mode
         if panel.isVisible { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+        bubble?.syncVisibility()
     }
 
     @objc func toggleQuietMode() {
         quietMode.toggle()
         if quietMode { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+        bubble?.syncVisibility()
         updateStatusItem()
     }
 
