@@ -47,7 +47,6 @@ final class BubbleWindow {
     }
 
     func update(_ new: BubbleSpec?) {
-        let wasShown = spec != nil
         spec = new
         guard let new else { return hide() }
         host.rootView = BubbleLabel(title: new.title, message: new.message)
@@ -56,7 +55,7 @@ final class BubbleWindow {
         glass.style = new.tint == nil ? .regular : .clear
         glass.tintColor = new.tint
         reposition()
-        if !wasShown { show() }
+        show()
     }
 
     /// Call after the pet window is shown or hidden (quiet mode, Hide Pet).
@@ -64,12 +63,16 @@ final class BubbleWindow {
         if spec != nil, parent?.isVisible == true { show() } else { panel.orderOut(nil) }
     }
 
+    /// Always fades to fully visible — also when a fade-out is still running, which would otherwise
+    /// finish and leave an invisible bubble behind (a nil spec followed quickly by a new one).
     private func show() {
         guard let parent, parent.isVisible else { return }
         if panel.parent == nil { parent.addChildWindow(panel, ordered: .above) }
-        guard !panel.isVisible else { return }
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
+        if !panel.isVisible {
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+        }
+        guard panel.alphaValue < 1 else { return }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.18
             panel.animator().alphaValue = 1
