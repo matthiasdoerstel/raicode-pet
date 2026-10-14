@@ -111,7 +111,8 @@ public enum EventMapper {
                 detail: detail,
                 pid: pid ?? previous?.pid,
                 updatedAt: now,
-                taskStartedAt: taskStartedAt
+                taskStartedAt: taskStartedAt,
+                stateSince: previous?.state == state ? (previous?.stateSince ?? now) : now
             ))
         }
     }

@@ -30,9 +30,12 @@ public struct SessionRecord: Codable, Equatable, Sendable {
     public var updatedAt: Date
     /// When the current task (prompt) began; kept through done/failed so its length is known.
     public var taskStartedAt: Date?
+    /// When the session entered its current state; repeat events in the same state keep it.
+    public var stateSince: Date?
 
     public init(sessionId: String, cwd: String, project: String, state: PetState,
-                detail: String? = nil, pid: Int32? = nil, updatedAt: Date, taskStartedAt: Date? = nil) {
+                detail: String? = nil, pid: Int32? = nil, updatedAt: Date, taskStartedAt: Date? = nil,
+                stateSince: Date? = nil) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.project = project
@@ -41,11 +44,17 @@ public struct SessionRecord: Codable, Equatable, Sendable {
         self.pid = pid
         self.updatedAt = updatedAt
         self.taskStartedAt = taskStartedAt
+        self.stateSince = stateSince
     }
 
     /// How long the task ran, up to the latest update.
     public var taskDuration: TimeInterval? {
         taskStartedAt.map { updatedAt.timeIntervalSince($0) }
+    }
+
+    /// How long the session has been in its current state.
+    public func timeInState(now: Date) -> TimeInterval {
+        now.timeIntervalSince(stateSince ?? updatedAt)
     }
 }
 

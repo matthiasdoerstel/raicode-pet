@@ -9,7 +9,15 @@ struct PetView: View {
     static let width: CGFloat = 200
 
     var body: some View {
-        VStack(spacing: 2) {
+        // Ticks so "needs you! · 4 min" keeps counting while the bubble is up.
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            content(now: context.date)
+        }
+    }
+
+    private func content(now: Date) -> some View {
+        let bubbleText = bubbleText(now: now)
+        return VStack(spacing: 2) {
             ZStack(alignment: .bottom) {
                 Color.clear
                 if let text = bubbleText {
@@ -19,20 +27,20 @@ struct PetView: View {
             }
             .frame(height: Self.bubbleHeight)
 
-            sprite
+            sprite(label: accessibilityText(bubbleText))
                 .frame(width: pet.art.displaySize.width, height: pet.art.displaySize.height)
         }
         .frame(width: Self.width)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: bubbleText?.message)
     }
 
-    @ViewBuilder private var sprite: some View {
+    @ViewBuilder private func sprite(label: String) -> some View {
         if let frame = pet.frame {
             Image(decorative: frame, scale: 1)
                 .resizable()
                 .interpolation(pet.art.smoothScaling ? .high : .none)
                 .aspectRatio(contentMode: .fit)
-                .accessibilityLabel(accessibilityText)
+                .accessibilityLabel(label)
         }
     }
 
@@ -40,7 +48,7 @@ struct PetView: View {
         store.sessions.first { $0.state == store.state }
     }
 
-    private var bubbleText: (title: String, message: String)? {
+    private func bubbleText(now: Date) -> (title: String, message: String)? {
         guard let s = focus else { return nil }
         let message: String
         switch store.state {
@@ -50,7 +58,8 @@ struct PetView: View {
         case .done: message = "Done!"
         case .failed: message = "something broke"
         }
-        return (pet.art.name, message)
+        let elapsed = s.elapsedText(now: now).map { " · \($0)" } ?? ""
+        return (pet.art.name, message + elapsed)
     }
 
     /// Deep enough to carry white text (≥ 4.5:1) as a glass tint, and dark text-on-white as a fallback.
@@ -63,7 +72,7 @@ struct PetView: View {
         }
     }
 
-    private var accessibilityText: String {
+    private func accessibilityText(_ bubbleText: (title: String, message: String)?) -> String {
         guard let t = bubbleText else { return "Raicode pet, sleeping" }
         return "Raicode pet: \(t.title), \(t.message)"
     }

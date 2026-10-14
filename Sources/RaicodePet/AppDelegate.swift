@@ -77,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         }
         let menu = NSMenu()
         for s in candidates {
-            let item = NSMenuItem(title: "\(emoji(s.state))  \(s.project) — \(label(s.state))",
+            let item = NSMenuItem(title: menuTitle(s),
                                   action: #selector(sessionChosen(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = s.sessionId
@@ -134,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
             menu.addItem(item)
         } else {
             for s in store.sessions {
-                let item = NSMenuItem(title: "\(emoji(s.state))  \(s.project) — \(label(s.state))",
+                let item = NSMenuItem(title: menuTitle(s),
                                       action: #selector(sessionChosen(_:)), keyEquivalent: "")
                 item.target = self
                 item.representedObject = s.sessionId
@@ -314,6 +314,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         case .done: return "✅"
         case .failed: return "😵"
         }
+    }
+
+    private func menuTitle(_ s: SessionRecord) -> String {
+        let elapsed = s.elapsedText(now: Date()).map { " · \($0)" } ?? ""
+        return "\(emoji(s.state))  \(s.project) — \(label(s.state))\(elapsed)"
     }
 
     private func label(_ s: PetState) -> String {

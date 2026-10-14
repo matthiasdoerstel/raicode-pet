@@ -17,6 +17,11 @@ final class PetController: ObservableObject {
     /// How long the pet stays happy after a task; then it dozes off while "Done!" stays up.
     private let happyDuration: TimeInterval = 15
     private var doneSince: Date?
+    /// While it needs you, the pet waves now and then — after a while, not right away.
+    private var waitingSince: Date?
+    private var nextNudge = Date.distantFuture
+    private let nudgeAfter: TimeInterval = 3 * 60
+    private let nudgeEvery: TimeInterval = 2 * 60
 
     /// The pet's window, for working out where the pointer is relative to the pet.
     weak var window: NSWindow?
@@ -46,6 +51,8 @@ final class PetController: ObservableObject {
         let previous = petState
         petState = state
         doneSince = state == .done ? Date() : nil
+        waitingSince = state == .waiting ? Date() : nil
+        nextNudge = waitingSince.map { $0.addingTimeInterval(nudgeAfter) } ?? .distantFuture
         if state == .done && previous != .done {
             play(.celebrate)
         } else {
@@ -120,6 +127,13 @@ final class PetController: ObservableObject {
                 frames = art.frames(animation)
             }
             frameIndex = 0
+        }
+
+        if animation == .waiting, frameIndex == 0, Date() > nextNudge, !reduceMotion {
+            nextNudge = Date().addingTimeInterval(nudgeEvery)
+            oneShot = .wave
+            animation = .wave
+            frames = art.frames(animation)
         }
 
         // Now and then, an idle pet stretches or looks around.

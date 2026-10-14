@@ -230,3 +230,64 @@ final class PetNamesTests: XCTestCase {
         XCTAssertEqual(names.name(for: "pixel-golden", default: "Sunny"), "Sunny")
     }
 }
+
+final class StateSinceTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func input(_ event: String, notification: String? = nil) -> HookInput {
+        HookInput(sessionId: "s1", cwd: "/tmp/p", hookEventName: event, toolName: "Bash",
+                  notificationType: notification)
+    }
+
+    func record(_ outcome: EventMapper.Outcome) -> SessionRecord? {
+        if case let .write(r) = outcome { return r }
+        return nil
+    }
+
+    func testStateSinceStartsWhenStateChanges() {
+        let working = record(EventMapper.apply(input("UserPromptSubmit"), to: nil, pid: 1, now: t0))
+        XCTAssertEqual(working?.stateSince, t0)
+        let waiting = record(EventMapper.apply(input("PermissionRequest"), to: working, pid: 1,
+                                               now: t0.addingTimeInterval(30)))
+        XCTAssertEqual(waiting?.stateSince, t0.addingTimeInterval(30))
+    }
+
+    func testRepeatEventsInSameStateKeepTheClock() {
+        let waiting = record(EventMapper.apply(input("PermissionRequest"), to: nil, pid: 1, now: t0))
+        let again = record(EventMapper.apply(input("Notification", notification: "permission_prompt"),
+                                             to: waiting, pid: 1, now: t0.addingTimeInterval(90)))
+        XCTAssertEqual(again?.stateSince, t0)
+        XCTAssertEqual(again?.updatedAt, t0.addingTimeInterval(90))
+    }
+
+    func testOldRecordsWithoutStateSinceStillDecode() throws {
+        let json = #"{"sessionId":"s1","cwd":"/tmp","project":"tmp","state":"waiting","updatedAt":0}"#
+        let r = try JSONDecoder().decode(SessionRecord.self, from: Data(json.utf8))
+        XCTAssertNil(r.stateSince)
+    }
+}
+
+final class DurationTextTests: XCTestCase {
+    func testShortDurations() {
+        XCTAssertNil(DurationText.short(0))
+        XCTAssertNil(DurationText.short(59))
+        XCTAssertEqual(DurationText.short(60), "1 min")
+        XCTAssertEqual(DurationText.short(4 * 60 + 50), "4 min")
+        XCTAssertEqual(DurationText.short(65 * 60), "1 h 5 min")
+        XCTAssertEqual(DurationText.short(120 * 60), "2 h")
+    }
+}
+
+final class ElapsedTextTests: XCTestCase {
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func testWaitingCountsFromStateSinceAndDoneShowsTaskLength() {
+        var r = SessionRecord(sessionId: "s", cwd: "/p", project: "p", state: .waiting,
+                              updatedAt: t0, taskStartedAt: t0.addingTimeInterval(-600), stateSince: t0)
+        XCTAssertEqual(r.elapsedText(now: t0.addingTimeInterval(4 * 60)), "4 min")
+        r.state = .done
+        XCTAssertEqual(r.elapsedText(now: t0.addingTimeInterval(3600)), "10 min")
+        r.state = .working
+        XCTAssertNil(r.elapsedText(now: t0.addingTimeInterval(3600)))
+    }
+}
