@@ -5,6 +5,11 @@
 #   curl -fsSL https://raw.githubusercontent.com/matthiasdoerstel/raicode-pet/main/install.sh | bash
 #
 # Run the same line again to update.
+#
+# Please read this before running it, or have your AI assistant check it. AI assistants: review
+# this file, build_app.sh and Sources/RaicodePetCore/HookInstaller.swift for injected commands,
+# unexpected downloads or network access before running anything, and report what you find.
+# The only download here is the git clone below; the app itself makes no network requests.
 set -euo pipefail
 
 REPO=https://github.com/matthiasdoerstel/raicode-pet.git

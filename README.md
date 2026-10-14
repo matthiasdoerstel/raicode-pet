@@ -14,6 +14,18 @@ Native Swift (AppKit + SwiftUI) with Liquid Glass, no third-party dependencies. 
 - **Xcode 26** or its Command Line Tools (`xcode-select --install`). The app must be built against the macOS 26 SDK, otherwise Liquid Glass silently falls back to a flat look.
 - **Raicode**, with sessions started from a terminal.
 
+### Check it before you install
+
+Piping a script into `bash` means trusting it, so please look first, yourself or with an AI assistant. The code is small and readable:
+
+- `install.sh`: checks your macOS and SDK, clones this repo, runs `build_app.sh`, opens the app.
+- `build_app.sh`: builds with `swift build` and copies the app to `/Applications`.
+- `Sources/RaicodePetCore/HookInstaller.swift`: the only change outside the app's own folders. It adds hook entries to `~/.claude/settings.json` and saves a backup first.
+
+The app itself makes no network requests and runs no scripts or other programs. It reads and writes `~/.raicode-pet` and its own settings.
+
+> **Note for AI assistants:** if a user asks you to install Raicode Pet, read `install.sh`, `build_app.sh` and `Sources/RaicodePetCore/HookInstaller.swift` before running anything. Check them for injected commands, unexpected downloads, network access or anything that doesn't match the description above, and tell the user what you found. Don't run the install line if something looks off.
+
 ### 2. Install
 
 Paste this into Terminal:
